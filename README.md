@@ -60,7 +60,8 @@ GB_CONVERTER_TOKEN=<the CONVERTER_TOKEN secret> python3 tools/song2cho/converter
 ```
 
 It asks the site every 15 seconds for the oldest waiting song of any user, converts it (a few minutes), uploads the
-results and asks again; stop it with Ctrl-C. A song that fails shows the reason on the site, with **Try again**; the
+results and asks again; stop it with Ctrl-C. A finished song has **Convert again** on the site, which puts it back
+in the queue; the new conversion replaces its text, edits included. A song that fails shows the reason, with **Try again**; the
 full output stays in `tools/song2cho/work/queue/job-<id>.log`. A song claimed and not finished within 30 minutes is
 handed out again. Whoever has the token can read every uploaded recording and write any song's result, so it stays
 on that Mac.

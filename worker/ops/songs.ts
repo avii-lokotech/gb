@@ -112,10 +112,12 @@ export async function saveSongSetting(c: Ctx, a: Args) {
     return shape(row);
 }
 
-// { id }: a failed conversion goes back in the queue.
+// { id }: back in the queue: a failed conversion to try again, or a finished song to convert again. A finished
+// song keeps its text and tracks until the new conversion is done, which then replaces them, the user's edits of
+// the text included. Its settings stay.
 export async function retrySong(c: Ctx, a: Args) {
     const row = await find(c, songId(a));
-    if (row.status !== "failed") throw new Fail(409, "Only a failed conversion can be tried again.");
+    if (row.status !== "failed" && row.status !== "ready") throw new Fail(409, "This song is already waiting to be converted.");
     await c.db.prepare("UPDATE song SET status = 'uploaded', error = '', claimed_at = NULL, updated_at = ?3 WHERE id = ?1 AND user_id = ?2")
         .bind(row.id, c.user, c.now).run();
     return shape({ ...row, status: "uploaded", error: "" });

@@ -12,7 +12,7 @@ const songs = ref([]);
 const error = ref('');
 const loading = ref(true);
 const uploading = ref('');      // the name of the file on its way up
-const confirming = ref(null);   // the id of the song whose Delete was clicked once
+const confirming = ref(null);   // { id, what }: the song whose Delete or Convert again was clicked once
 const fileInput = ref(null);
 
 document.title = 'Guitar Book';
@@ -76,7 +76,8 @@ async function act(call) {
   }
 }
 const toggleFavourite = (song) => act(async () => replace(await api.saveSongSetting(song.id, { favourite: !song.favourite })));
-const retry = (song) => act(async () => { replace(await api.retrySong(song.id)); refresh(); });
+const retry = (song) => act(async () => { confirming.value = null; replace(await api.retrySong(song.id)); refresh(); });
+const asking = (song, what) => confirming.value?.id === song.id && confirming.value.what === what;
 const remove = (song) => act(async () => {
   confirming.value = null;
   await api.deleteSong(song.id);
@@ -124,11 +125,20 @@ function logout() {
         </component>
         <span class="flex gap-1.5 pl-1.5 pr-3.5">
           <button v-if="song.status === 'failed'" class="px-2 py-[3px] text-12 text-muted" @click="retry(song)">Try again</button>
-          <template v-if="confirming === song.id">
+          <template v-if="asking(song, 'delete')">
             <button class="border-warn-ink bg-warn-bg px-2 py-[3px] text-12 text-warn-ink" @click="remove(song)">Delete for good</button>
             <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = null">Keep</button>
           </template>
-          <button v-else class="px-2 py-[3px] text-12 text-muted" @click="confirming = song.id">Delete</button>
+          <template v-else-if="asking(song, 'convert')">
+            <button class="border-warn-ink bg-warn-bg px-2 py-[3px] text-12 text-warn-ink" title="The new conversion replaces the song's text, including your edits"
+              @click="retry(song)">Convert and replace my edits</button>
+            <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = null">Keep</button>
+          </template>
+          <template v-else>
+            <button v-if="song.status === 'ready'" class="px-2 py-[3px] text-12 text-muted" title="Run the conversion again, e.g. after the converter was improved"
+              @click="confirming = { id: song.id, what: 'convert' }">Convert again</button>
+            <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = { id: song.id, what: 'delete' }">Delete</button>
+          </template>
         </span>
       </li>
     </ul>

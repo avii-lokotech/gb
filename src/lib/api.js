@@ -105,7 +105,8 @@ export const api = {
   // patch: { favourite?, speed?, loop?, played? }; omitted is unchanged, loop null clears it, played true stamps
   // last_played_at. → the song after the change.
   saveSongSetting: (id, patch) => req('saveSongSetting', { id, ...patch }),
-  // A failed conversion goes back in the queue. → the song.
+  // Back in the queue: a failed conversion to try again, or a finished song to convert again (the new conversion
+  // replaces its text, edits included). → the song.
   retrySong: (id) => req('retrySong', { id }),
   // The song and its audio, for good.
   deleteSong: (id) => req('deleteSong', { id })
