@@ -73,6 +73,36 @@ def regularize_start(bar_starts, n_beats):
     return head + [b for b in bar_starts if b >= first]
 
 
+def merge_half_bars(bar_starts, n_beats, chords):
+    """The downbeat tracker can fall into marking every half bar for a stretch (2 + 2 + 2 + 2 beats where the
+    song plays 4 + 4). A run of two or more half-length bars is joined in pairs into whole bars; a single one
+    is left alone, as a real short bar. An odd run leaves one half bar over: at its end, or at its start when
+    that puts more chord changes on the downbeats of the joined bars. Returns the bar starts and the number
+    of bars joined away."""
+    lens = [int(n) for n in np.diff(bar_starts + [n_beats])]
+    meter = int(np.bincount(lens).argmax())
+    if meter < 4 or meter % 2:
+        return bar_starts, 0
+    half = meter // 2
+    changes = lambda starts: sum(1 for i in starts if i > 0 and chords[i] != chords[i - 1])
+    out, i = [], 0
+    while i < len(lens):
+        j = i
+        while j < len(lens) and lens[j] == half:
+            j += 1
+        if j - i < 2:
+            out.append(bar_starts[i]); i += 1
+            continue
+        run = bar_starts[i:j]
+        keep = run[0::2]                                  # pairs from the start; an odd run's last bar stays short
+        if len(run) % 2:
+            alt = [run[0]] + run[1::2]                    # the first bar stays short, pairs after it
+            if changes(alt[1:]) > changes(keep[1:]):
+                keep = alt
+        out.extend(keep); i = j
+    return out, len(bar_starts) - len(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("work"); ap.add_argument("out")
@@ -97,6 +127,9 @@ def main():
     if bar_starts[0] != 0:
         bar_starts = [0] + bar_starts  # beats before the first downbeat: pickup bar
     bar_starts = regularize_start(bar_starts, len(beats))
+    bar_starts, joined = merge_half_bars(bar_starts, len(beats), raw)
+    if joined:
+        print(f"joined {joined} pairs of half bars into whole bars")
     last_beats = [] if a.keep_passing else [i - 1 for i in bar_starts if i > 0]
     lab = clean_beat_chords(raw, conf, last_beats)
 

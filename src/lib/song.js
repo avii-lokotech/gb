@@ -106,7 +106,7 @@ export function beatLen(sync) {
 /* ---------------- layout ---------------- */
 // The sheet of a parsed song, lined up with its timing (sync, or null):
 //   capo, flats     for showing the sounding chords instead of the shapes
-//   sections        [{ comment }] or [{ label, lyrics, rows }]; a row is a lyric line with the bars it is sung
+//   sections        [{ comment }] or [{ label, meter, bpm, lyrics, rows }]; meter is the section's time signature(s), bpm its tempo; a row is a lyric line with the bars it is sung
 //                   over, or bars only: { time, bars: [{ k, n, cells: [{ tok, dot }], carry, strum }], chunks, g }
 //   cols            beats of the longest row: every beat is one column of the sheet
 //   cellCounts[k]   cells of bar k
@@ -170,6 +170,33 @@ export function layoutSong(song, sync) {
     else items.push([b]);
   }
 
+  // The time signature of the bars [k0, k1) of a section, from their beats: "4/4", or "4/4, 2/4" when it also
+  // has bars of another length (the most common first). The beat's note value is the song's ({time: 4/4}).
+  // Not counted: a pickup (a first bar shorter than the next) and one-beat bars, which are a tracker's stumble
+  // or a held last chord rather than a signature.
+  const unit = (meta.time || '').match(/^\d+\/(\d+)$/)?.[1] || '4';
+  const songMeter = parseInt(meta.time, 10) || 4;
+  const meterOf = (k0, k1) => {
+    const count = new Map();
+    for (let k = k0; k < k1; k++) {
+      const n = bars[k].n;
+      if (n < 2 || (k === k0 && k + 1 < k1 && n < bars[k + 1].n)) continue;
+      count.set(n, (count.get(n) || 0) + 1);
+    }
+    return [...count.keys()]
+      .sort((a, b) => count.get(b) - count.get(a) || (b === songMeter) - (a === songMeter) || b - a)
+      .map((n) => `${n}/${unit}`).join(', ');
+  };
+
+  // The tempo the bars [k0, k1) of a section are played at, in beats per minute, from the recording's beats;
+  // 0 when the bars are not lined up with it. A recording rarely keeps one tempo, so this can differ from the
+  // song's {tempo: …}, which is its middle value.
+  const bpmOf = (k0, k1) => {
+    if (!barsMatch || k1 <= k0) return 0;
+    const i0 = sync.bars[k0][0], i1 = Math.min(sync.beats.length - 1, sync.bars[k1 - 1][1]);
+    return i1 > i0 ? Math.round(60 * (i1 - i0) / (sync.beats[i1] - sync.beats[i0])) : 0;
+  };
+
   // 1. cut every section into rows: a lyric line with the bars it is sung over,
   //    or (instrumental) up to 4 bars with no lyrics
   const barOfT = (t) => { const i = beatAt(sync, t); return i < 0 ? 0 : barOfBeat(sync, i); };
@@ -213,7 +240,8 @@ export function layoutSong(song, sync) {
       if (grid) plain(k0, k1, rows);
       if (lyr) lines.forEach(({ chunks, g }) => rows.push({ k0: 0, k1: 0, chunks, g }));
     }
-    sections.push({ label: parts[0].label || parts[0].env || '', rows, lyrics: !!lyr });
+    sections.push({ label: parts[0].label || parts[0].env || '', meter: grid ? meterOf(k0, k1) : '',
+      bpm: grid ? bpmOf(k0, k1) : 0, rows, lyrics: !!lyr });
   }
 
   // 2. one width for every beat: the grid has as many columns as the longest row has beats
