@@ -44,11 +44,11 @@ watch(() => props.curBar, (k) => {
     <template v-for="(s, si) in layout.sections" :key="si">
       <div v-if="s.comment !== undefined" class="px-1.5 text-12 italic text-muted">{{ s.comment }}</div>
       <section v-else class="mb-3.5 rounded-[10px] border border-line bg-panel px-3.5 py-3">
-        <div class="mb-1.5 text-13 font-bold uppercase tracking-[.05em] text-muted">{{ [s.label, s.meter, s.bpm ? `${s.bpm} bpm` : ''].filter(Boolean).join(' - ') }}</div>
-        <!-- one row = time | the bars of a lyric line | that lyric line -->
+        <div class="mb-1.5 text-13 font-bold uppercase tracking-[.05em] text-muted">{{ s.bpm ? `${s.label} - ${s.bpm} bpm` : s.label }}</div>
+        <!-- one row = time and time signature | the bars of a lyric line | that lyric line -->
         <div v-for="(r, ri) in s.rows" :key="ri"
-          class="grid grid-cols-[44px_minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-x-[18px] py-[3px] max-[900px]:grid-cols-[44px_minmax(0,1fr)] max-[900px]:gap-y-0.5">
-          <div class="cursor-pointer self-center text-12 tabular-nums text-muted" @click="r.bars.length && emit('seek-bar', r.bars[0].k, false)">{{ r.time }}</div>
+          class="grid grid-cols-[64px_minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-x-[18px] py-[3px] max-[900px]:grid-cols-[64px_minmax(0,1fr)] max-[900px]:gap-y-0.5">
+          <div class="cursor-pointer self-center text-12 tabular-nums text-muted" @click="r.bars.length && emit('seek-bar', r.bars[0].k, false)">{{ r.time }} {{ r.meter }}</div>
           <!-- every beat is one column, so all beats are equally wide and bars are as long as their beats -->
           <div class="grid grid-cols-[repeat(var(--cols,16),minmax(0,1fr))] self-stretch">
             <div v-for="bar in r.bars" :key="bar.k" :data-bar="bar.k"
