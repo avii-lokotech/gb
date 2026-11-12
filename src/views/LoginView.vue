@@ -31,29 +31,17 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <main>
-    <form class="card" novalidate @submit.prevent="handleSubmit">
-      <h1>Guitar Book</h1>
-      <label for="email">Email</label>
-      <input id="email" v-model.trim="email" type="email" autocomplete="username" required />
-      <label for="password">Password</label>
-      <input id="password" v-model="password" type="password" autocomplete="current-password" required />
-      <p v-if="error" class="warn" role="alert">{{ error }}</p>
-      <button type="submit" :disabled="submitting">{{ submitting ? 'Signing in…' : 'Sign in' }}</button>
+  <main class="grid min-h-screen place-items-center p-4">
+    <form class="grid w-full max-w-[340px] gap-1.5 rounded-[10px] border border-line bg-panel p-5" novalidate @submit.prevent="handleSubmit">
+      <h1 class="mb-2.5">Guitar Book</h1>
+      <label for="email" class="text-13 text-muted">Email</label>
+      <input id="email" v-model.trim="email" class="field" type="email" autocomplete="username" required />
+      <label for="password" class="text-13 text-muted">Password</label>
+      <input id="password" v-model="password" class="field" type="password" autocomplete="current-password" required />
+      <p v-if="error" class="warn mb-2 rounded-md px-2.5" role="alert">{{ error }}</p>
+      <button type="submit" class="border-accent bg-accent-soft px-2.5 py-2 font-semibold disabled:opacity-60" :disabled="submitting">
+        {{ submitting ? 'Signing in…' : 'Sign in' }}
+      </button>
     </form>
   </main>
 </template>
-
-<style scoped>
-main { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-.card { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding: 20px; display: grid; gap: 6px; }
-h1 { margin-bottom: 10px; }
-label { font-size: 13px; color: var(--muted); }
-input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
-  padding: 7px 10px; margin-bottom: 8px; }
-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.warn { border-radius: 6px; margin: 0 0 8px; padding: 8px 10px; }
-button { padding: 8px 10px; font-weight: 600; background: var(--accent-soft); border-color: var(--accent); }
-button:disabled { opacity: .6; }
-</style>

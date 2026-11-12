@@ -467,139 +467,89 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header>
-    <div class="top">
-      <RouterLink class="back" :to="{ name: 'songs' }">‹ Songs</RouterLink>
+  <header class="sticky top-0 z-[5] border-b border-line bg-panel px-4 py-2.5">
+    <div class="flex flex-wrap items-center gap-4">
+      <RouterLink class="text-13 text-muted no-underline hover:text-accent" :to="{ name: 'songs' }">‹ Songs</RouterLink>
       <div>
         <h1>{{ title }}</h1>
-        <div class="meta">{{ meta }}</div>
+        <div class="text-13 text-muted">{{ meta }}</div>
       </div>
-      <div class="now">
+      <div class="ml-auto flex items-baseline gap-[22px]">
         <div>
-          <div class="lbl">Now <span class="beatDots"><i v-for="q in dotsN" :key="q" :class="{ on: q - 1 === dotsPos }"></i></span></div>
-          <span class="nowChord">{{ nowChord ? show(nowChord) : '–' }}</span>
+          <div class="text-11 uppercase tracking-[.06em] text-muted">Now <span class="ml-1.5 inline-flex gap-1 align-middle"><i v-for="q in dotsN" :key="q"
+            class="inline-block h-[9px] w-[9px] rounded-full" :class="q - 1 === dotsPos ? 'bg-beat' : 'bg-line'"></i></span></div>
+          <span class="inline-block min-w-[2.5ch] text-30 font-bold text-chord">{{ nowChord ? show(nowChord) : '–' }}</span>
         </div>
         <div>
-          <div class="lbl">Next</div>
-          <span class="nextChord">{{ nextChord ? show(nextChord) : '–' }}</span> <span class="nextIn">{{ nextIn }}</span>
+          <div class="text-11 uppercase tracking-[.06em] text-muted">Next</div>
+          <span class="text-20 font-semibold">{{ nextChord ? show(nextChord) : '–' }}</span> <span class="text-12 text-muted">{{ nextIn }}</span>
         </div>
       </div>
     </div>
-    <div class="controls">
-      <button class="play" title="Space" @click="togglePlay">{{ playing ? '❚❚ Pause' : '▶ Play' }}</button>
-      <span class="time">{{ timeText }}</span>
-      <input class="seek" type="range" min="0" max="1000" :value="seekVal" aria-label="Position"
+    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <button class="min-w-[74px] font-semibold" title="Space" @click="togglePlay">{{ playing ? '❚❚ Pause' : '▶ Play' }}</button>
+      <span class="min-w-[92px] text-13 tabular-nums text-muted">{{ timeText }}</span>
+      <input class="m-[2px] min-w-[140px] flex-1 accent-accent" type="range" min="0" max="1000" :value="seekVal" aria-label="Position"
         @input="onSeekInput" @change="seeking = false">
       <select title="[ and ] to change" :value="speed" @change="setSpeed(+$event.target.value)">
         <option v-for="s in SPEEDS" :key="s" :value="s">{{ Math.round(s * 100) }}%</option>
       </select>
-      <button title="L" :class="{ on: loopOn }" @click="toggleLoop">{{ loopText }}</button>
-      <button title="C" :class="{ on: clickOn }" @click="clickOn = !clickOn">Click</button>
-      <button :disabled="!hasInst" :class="{ on: !vocalsOn && !rhythmOnly }" @click="toggleVocals"
+      <button title="L" :class="{ 'btn-on': loopOn }" @click="toggleLoop">{{ loopText }}</button>
+      <button title="C" :class="{ 'btn-on': clickOn }" @click="clickOn = !clickOn">Click</button>
+      <button :disabled="!hasInst" :class="{ 'btn-on': !vocalsOn && !rhythmOnly }" @click="toggleVocals"
         :title="hasInst ? 'V: mute or unmute the vocals' : 'No band-only track for this song'">
         {{ vocalsOn ? 'Vocals on' : 'Vocals off' }}
       </button>
-      <button :disabled="!hasRhythm" :class="{ on: rhythmOnly }" @click="toggleRhythm"
+      <button :disabled="!hasRhythm" :class="{ 'btn-on': rhythmOnly }" @click="toggleRhythm"
         :title="hasRhythm ? 'B: play only the drums and bass' : 'No drums & bass track for this song'">
         Drums &amp; bass
       </button>
-      <button title="F" :class="{ on: follow }" @click="follow = !follow">Follow</button>
-      <button title="P" :class="{ on: sounding }" :disabled="!capo" @click="sounding = !sounding">{{ pitchText }}</button>
-      <button title="Correct the chords and lyrics" :class="{ on: editing }" :disabled="!layout" @click="editing ? cancelEdit() : startEdit()">Edit</button>
-      <button class="syncBtn" :class="{ on: tapMode }" title="S: tap the space bar on every beat to sync" @click="toggleTapSync">
+      <button title="F" :class="{ 'btn-on': follow }" @click="follow = !follow">Follow</button>
+      <button title="P" :class="{ 'btn-on': sounding }" :disabled="!capo" @click="sounding = !sounding">{{ pitchText }}</button>
+      <button title="Correct the chords and lyrics" :class="{ 'btn-on': editing }" :disabled="!layout" @click="editing ? cancelEdit() : startEdit()">Edit</button>
+      <button :class="{ 'border-accent bg-accent text-white': tapMode }" title="S: tap the space bar on every beat to sync" @click="toggleTapSync">
         {{ tapMode ? 'Tapping… (Esc)' : 'Tap to sync' }}
       </button>
-      <span class="offbox" title="How much later the beats start than the audio">
-        <span class="offlbl">Beats</span>
-        <button title="Beats 10 ms earlier (− key)" @click="setTrim(trim + 0.01)">−</button>
-        <span class="offVal" :class="{ nonzero: offDelay !== 0 }" :title="offTitle">{{ (offDelay > 0 ? '+' : '') + offDelay }} ms</span>
-        <button title="Beats 10 ms later (+ key)" @click="setTrim(trim - 0.01)">+</button>
-        <button class="offReset" title="Back to 0 ms: audio and beats start together" :disabled="offDelay === 0" @click="setTrim(0)">Reset</button>
+      <span class="inline-flex items-center gap-1" title="How much later the beats start than the audio">
+        <span class="text-12 text-muted">Beats</span>
+        <button class="min-w-[30px] font-bold" title="Beats 10 ms earlier (− key)" @click="setTrim(trim + 0.01)">−</button>
+        <span class="min-w-[58px] text-center text-13 tabular-nums" :class="{ 'font-semibold text-accent': offDelay !== 0 }" :title="offTitle">{{ (offDelay > 0 ? '+' : '') + offDelay }} ms</span>
+        <button class="min-w-[30px] font-bold" title="Beats 10 ms later (+ key)" @click="setTrim(trim - 0.01)">+</button>
+        <button class="min-w-[30px] disabled:opacity-[.45]" title="Back to 0 ms: audio and beats start together" :disabled="offDelay === 0" @click="setTrim(0)">Reset</button>
       </span>
-      <span class="syncStatus" :class="{ ok: syncOk }" :title="syncTitle">{{ syncStatus }}</span>
+      <span class="text-12" :class="syncOk ? 'text-ok' : 'text-muted'" :title="syncTitle">{{ syncStatus }}</span>
     </div>
-    <div class="help">Click a bar, lyric line or time to jump · <kbd>Shift</kbd>+click a bar to loop from the last clicked bar ·
+    <div class="mt-1.5 text-12 text-muted">Click a bar, lyric line or time to jump · <kbd>Shift</kbd>+click a bar to loop from the last clicked bar ·
       <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> bar · <kbd>L</kbd> loop · <kbd>C</kbd> click · <kbd>V</kbd> vocals · <kbd>B</kbd> drums &amp; bass · <kbd>S</kbd> tap to sync · <kbd>−</kbd>/<kbd>+</kbd> beats 10 ms earlier/later</div>
-    <div v-if="tapInfo" class="tapbanner">
+    <div v-if="tapInfo" class="mt-2 flex flex-wrap items-center gap-3.5 rounded-lg border border-accent bg-accent-soft px-3.5 py-2.5 text-15">
       <span v-if="tapInfo.first">Tap the <b>space bar</b> on every beat, like tapping your foot.</span>
       <span v-else>{{ tapInfo.text }}</span>
       <template v-if="!tapInfo.done">
-        <span class="dots"><i v-for="i in TAPS_NEEDED" :key="i" :class="{ on: i - 1 < tapInfo.count }"></i></span>
-        <span class="sub">Esc to cancel</span>
+        <span class="inline-flex gap-[5px]"><i v-for="i in TAPS_NEEDED" :key="i" class="inline-block h-3 w-3 rounded-full border-2 border-accent"
+          :class="{ 'bg-accent': i - 1 < tapInfo.count }"></i></span>
+        <span class="text-12 text-muted">Esc to cancel</span>
       </template>
     </div>
   </header>
   <div v-if="warn" class="warn">{{ warn }}</div>
   <SongSheet v-if="layout" :layout="layout" :sounding="sounding" :cur-bar="curBar" :cur-cell="curCell" :cur-line="curLine"
     :loop="loopRange" :follow="follow" :playing="playing" @seek-bar="seekBar" @seek-line="seekLine" />
+  <!-- the editor: a drawer over the bottom of the page; the spacer keeps the end of the sheet reachable above it -->
   <template v-if="editing">
-    <div class="editspace"></div>
-    <section class="editor" aria-label="The song's text">
-      <div class="editbar">
-        <button class="save" :disabled="saving || !dirty" @click="saveEdit">{{ saving ? 'Saving…' : 'Save' }}</button>
-        <button :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</button>
-        <button :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</button>
-        <span class="editnote" role="status">{{ editNote }}</span>
-        <span class="edithelp">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
+    <div class="h-[42vh]"></div>
+    <section class="fixed inset-x-0 bottom-0 z-[6] flex h-[40vh] flex-col border-t border-line bg-panel shadow-[0_-6px_18px_rgb(0_0_0/.18)]" aria-label="The song's text">
+      <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-2">
+        <button class="border-accent bg-accent-soft font-semibold disabled:opacity-[.45]" :disabled="saving || !dirty" @click="saveEdit">{{ saving ? 'Saving…' : 'Save' }}</button>
+        <button class="disabled:opacity-[.45]" :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</button>
+        <button class="disabled:opacity-[.45]" :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</button>
+        <span class="text-13 text-accent" role="status">{{ editNote }}</span>
+        <span class="ml-auto text-12 text-muted">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
           In the lyrics <code>[Am]</code> puts a chord before a word. Keep the number of bars and of lyric lines.</span>
       </div>
-      <textarea :value="editText" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="ChordPro text"
-        @input="onEditInput"></textarea>
+      <textarea class="min-h-0 w-full flex-1 resize-none overflow-auto whitespace-pre border-0 border-t border-line bg-bg px-4 py-2.5 font-mono text-13 leading-normal text-ink [tab-size:4] focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-accent"
+        :value="editText" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="ChordPro text" @input="onEditInput"></textarea>
     </section>
   </template>
   <audio ref="audio" preload="auto" @play="onPlay" @pause="playing = false" @playing="scheduleMeasure"
     @seeked="onSeeked" @ratechange="updateOffset"></audio>
 </template>
-
-<style scoped>
-header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line);
-  padding: 10px 16px; }
-.top { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.back { color: var(--muted); font-size: 13px; text-decoration: none; }
-.back:hover { color: var(--accent); }
-.meta { color: var(--muted); font-size: 13px; }
-.controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
-button.play { min-width: 74px; font-weight: 600; }
-.time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 92px; }
-.seek { flex: 1; min-width: 140px; accent-color: var(--accent); }
-.now { display: flex; gap: 22px; align-items: baseline; margin-left: auto; }
-.now .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.nowChord { font-size: 30px; font-weight: 700; color: var(--chord); min-width: 2.5ch; display: inline-block; }
-.nextChord { font-size: 20px; font-weight: 600; }
-.nextIn { font-size: 12px; color: var(--muted); }
-.beatDots { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
-.beatDots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
-.beatDots i.on { background: var(--beat); }
-.help { color: var(--muted); font-size: 12px; margin-top: 6px; }
-.syncStatus { font-size: 12px; color: var(--muted); }
-.offbox { display: inline-flex; align-items: center; gap: 4px; }
-.offlbl { font-size: 12px; color: var(--muted); }
-.offbox button { min-width: 30px; font-weight: 700; }
-.offbox button.offReset { font-weight: 400; }
-.offReset:disabled { opacity: .45; cursor: default; }
-.offVal { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 58px; text-align: center; }
-.offVal.nonzero { color: var(--accent); font-weight: 600; }
-.syncStatus.ok { color: #16a34a; }
-.syncBtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.tapbanner { margin-top: 8px; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft);
-  border: 1px solid var(--accent); font-size: 15px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.tapbanner .dots { display: inline-flex; gap: 5px; }
-.tapbanner .dots i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent); display: inline-block; }
-.tapbanner .dots i.on { background: var(--accent); }
-.tapbanner .sub { font-size: 12px; color: var(--muted); }
-/* the editor: a drawer over the bottom of the page; editspace keeps the end of the sheet reachable above it */
-.editspace { height: 42vh; }
-.editor { position: fixed; left: 0; right: 0; bottom: 0; height: 40vh; z-index: 6; display: flex; flex-direction: column;
-  background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgb(0 0 0 / .18); }
-.editbar { display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; padding: 8px 16px; }
-.editbar .save { font-weight: 600; background: var(--accent-soft); border-color: var(--accent); }
-.editbar button:disabled { opacity: .45; }
-.editnote { font-size: 13px; color: var(--accent); }
-.edithelp { font-size: 12px; color: var(--muted); margin-left: auto; }
-.edithelp code { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
-.editor textarea { flex: 1; min-height: 0; width: 100%; resize: none; border: 0; border-top: 1px solid var(--line);
-  padding: 10px 16px; background: var(--bg); color: var(--ink); font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre; overflow: auto; tab-size: 4; }
-.editor textarea:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
-kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
-</style>

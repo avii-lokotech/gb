@@ -10,6 +10,8 @@ player. Songs are not in this repo.
 
 - `src/` — the SPA: login, the songs with the upload (`views/SongsView.vue`) and the player (`views/PlayerView.vue`
   with `components/SongSheet.vue`; parsing and layout in `lib/song.js`). All network calls go through `src/lib/api.js`.
+  Styling is Tailwind 3: utility classes in the templates, with the site's colours and type sizes as its theme
+  (`tailwind.config.js`) and the tokens, element defaults and three named classes in `src/style.css`.
 - `worker/` — the Worker; only `/api/*` reaches it. `POST /api/login` returns a JWT; `POST /api/<op>` runs one op
   (`worker/ops/`) for the logged-in user; `POST /api/uploadSong` and `GET /api/audio/<id>/<track>` carry the audio;
   `/api/converter/*` is the converter's side of the queue, with its own token (`worker/converter.ts`).

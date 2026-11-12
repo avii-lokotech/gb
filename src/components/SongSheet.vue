@@ -22,6 +22,16 @@ const cellText = (bar, cell, i) => (i === 0 && bar.carry
   ? show(bar.carry)
   : cell.tok.split('~').map((x) => (isChordToken(x) ? show(x) : x)).join(' '));
 const inLoop = (k) => props.loop !== null && k >= props.loop[0] && k <= props.loop[1];
+// The current bar is tinted; a bar of the loop has the loop's colour, or its outline when it is also current.
+function barClass(k) {
+  if (k === props.curBar) return inLoop(k) ? 'bg-accent-soft shadow-[inset_0_0_0_2px_var(--loop-line)]' : 'bg-accent-soft';
+  return inLoop(k) ? 'bg-loop' : '';
+}
+// A chord, a dot (the chord goes on), or at the start of a row the chord still ringing from the row above.
+function cellClass(bar, cell, i) {
+  if (i === 0 && bar.carry) return 'font-semibold text-muted';
+  return cell.dot ? 'font-normal text-line' : 'font-semibold text-chord';
+}
 
 watch(() => props.curBar, (k) => {
   if (!props.follow || !props.playing || k < 0) return;
@@ -30,79 +40,45 @@ watch(() => props.curBar, (k) => {
 </script>
 
 <template>
-  <main ref="root" :style="{ '--cols': layout.cols }">
+  <main ref="root" class="mx-auto max-w-[1200px] p-4" :style="{ '--cols': layout.cols }">
     <template v-for="(s, si) in layout.sections" :key="si">
-      <div v-if="s.comment !== undefined" class="cmt">{{ s.comment }}</div>
-      <section v-else class="section">
-        <div class="label">{{ s.label }}</div>
-        <div v-for="(r, ri) in s.rows" :key="ri" class="srow">
-          <div class="margin" @click="r.bars.length && emit('seek-bar', r.bars[0].k, false)">{{ r.time }}</div>
-          <div class="bars">
-            <div v-for="bar in r.bars" :key="bar.k" class="bar" :data-bar="bar.k"
-              :class="{ cur: bar.k === curBar, inloop: inLoop(bar.k) }"
+      <div v-if="s.comment !== undefined" class="px-1.5 text-12 italic text-muted">{{ s.comment }}</div>
+      <section v-else class="mb-3.5 rounded-[10px] border border-line bg-panel px-3.5 py-3">
+        <div class="mb-1.5 text-13 font-bold uppercase tracking-[.05em] text-muted">{{ s.label }}</div>
+        <!-- one row = time | the bars of a lyric line | that lyric line -->
+        <div v-for="(r, ri) in s.rows" :key="ri"
+          class="grid grid-cols-[44px_minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-x-[18px] py-[3px] max-[900px]:grid-cols-[44px_minmax(0,1fr)] max-[900px]:gap-y-0.5">
+          <div class="cursor-pointer self-center text-12 tabular-nums text-muted" @click="r.bars.length && emit('seek-bar', r.bars[0].k, false)">{{ r.time }}</div>
+          <!-- every beat is one column, so all beats are equally wide and bars are as long as their beats -->
+          <div class="grid grid-cols-[repeat(var(--cols,16),minmax(0,1fr))] self-stretch">
+            <div v-for="bar in r.bars" :key="bar.k" :data-bar="bar.k"
+              class="grid min-h-[34px] cursor-pointer content-center border-l-2 border-line py-0.5 last:border-r-2"
+              :class="barClass(bar.k)"
               :style="{ gridColumn: 'span ' + bar.n, gridTemplateColumns: `repeat(${bar.cells.length}, minmax(0, 1fr))` }"
               @click="emit('seek-bar', bar.k, $event.shiftKey)">
-              <div v-for="(cell, i) in bar.cells" :key="i" class="cell"
-                :class="{ carry: i === 0 && bar.carry, dot: cell.dot && !(i === 0 && bar.carry), beat: bar.k === curBar && i === curCell }">
+              <div v-for="(cell, i) in bar.cells" :key="i" class="min-w-0 overflow-hidden whitespace-nowrap rounded px-[3px] py-1 text-14"
+                :class="[cellClass(bar, cell, i), { 'outline outline-2 -outline-offset-2 outline-beat': bar.k === curBar && i === curCell }]">
                 {{ cellText(bar, cell, i) }}
               </div>
               <!-- strum pattern under the chords -->
-              <div v-if="bar.strum" class="strumrow" :style="{ gridTemplateColumns: `repeat(${bar.strum.length}, minmax(0, 1fr))` }">
-                <div v-for="(tok, i) in bar.strum" :key="i" class="strum">{{ tok.replace(/~/g, ' ') }}</div>
+              <div v-if="bar.strum" class="col-span-full grid" :style="{ gridTemplateColumns: `repeat(${bar.strum.length}, minmax(0, 1fr))` }">
+                <div v-for="(tok, i) in bar.strum" :key="i" class="overflow-hidden whitespace-nowrap px-[3px] text-12 text-muted">{{ tok.replace(/~/g, ' ') }}</div>
               </div>
             </div>
           </div>
+          <!-- lyrics with chords above the words -->
           <template v-if="s.lyrics">
-            <div v-if="r.chunks" class="ln line" :class="{ cur: r.g === curLine }" @click="emit('seek-line', r.g)">
-              <span v-for="(ch, i) in r.chunks" :key="i" class="chunk">
-                <span class="c">{{ ch.c ? show(ch.c) : '' }}</span>
-                <span class="t">{{ ch.t || (ch.c ? ' ' : '') }}</span>
+            <div v-if="r.chunks" class="flex min-w-0 cursor-pointer flex-wrap items-end rounded-md px-1.5 py-[3px] hover:bg-bg max-[900px]:col-start-2"
+              :class="{ 'bg-accent-soft': r.g === curLine }" @click="emit('seek-line', r.g)">
+              <span v-for="(ch, i) in r.chunks" :key="i" class="inline-flex flex-col whitespace-pre">
+                <span class="min-h-[1.2em] pr-1 text-13 font-bold text-chord">{{ ch.c ? show(ch.c) : '' }}</span>
+                <span class="min-h-[1.3em]">{{ ch.t || (ch.c ? ' ' : '') }}</span>
               </span>
             </div>
-            <div v-else class="ln"></div>
+            <div v-else class="flex min-w-0 flex-wrap items-end rounded-md px-1.5 py-[3px] max-[900px]:col-start-2"></div>
           </template>
         </div>
       </section>
     </template>
   </main>
 </template>
-
-<style scoped>
-main { max-width: 1200px; margin: 0 auto; padding: 16px; }
-.section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
-  margin-bottom: 14px; }
-.label { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
-  margin-bottom: 6px; }
-/* one row = time | the bars of a lyric line | that lyric line */
-.srow { display: grid; grid-template-columns: 44px minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 18px;
-  align-items: center; padding: 3px 0; }
-@media (max-width: 900px) {
-  .srow { grid-template-columns: 44px minmax(0, 1fr); row-gap: 2px; }
-  .srow .ln { grid-column: 2; }
-}
-.margin { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; align-self: center; }
-/* every beat is one column, so all beats are equally wide and bars are as long as their beats */
-.bars { display: grid; grid-template-columns: repeat(var(--cols, 16), minmax(0, 1fr)); align-self: stretch; }
-.bar { display: grid; border-left: 2px solid var(--line); padding: 2px 0; cursor: pointer; min-height: 34px;
-  align-content: center; }
-.bar:last-child { border-right: 2px solid var(--line); }
-.bar.cur { background: var(--accent-soft); }
-.bar.inloop { background: var(--loop); }
-.bar.cur.inloop { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--loop-line); }
-.cell { padding: 4px 3px; font-weight: 600; color: var(--chord); font-size: 14px;
-  border-radius: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.cell.dot { color: var(--line); font-weight: 400; }
-.cell.carry { color: var(--muted); }
-.cell.beat { outline: 2px solid var(--beat); outline-offset: -2px; }
-.strumrow { grid-column: 1 / -1; display: grid; }
-.strum { font-size: 12px; color: var(--muted); white-space: nowrap; padding: 0 3px; overflow: hidden; }
-/* lyrics with chords above the words */
-.ln { padding: 3px 6px; border-radius: 6px; display: flex; flex-wrap: wrap; align-items: flex-end; min-width: 0; }
-.ln.line { cursor: pointer; }
-.ln.line:hover { background: var(--bg); }
-.ln.cur { background: var(--accent-soft); }
-.chunk { display: inline-flex; flex-direction: column; white-space: pre; }
-.chunk .c { color: var(--chord); font-weight: 700; font-size: 13px; min-height: 1.2em; padding-right: 4px; }
-.chunk .t { min-height: 1.3em; }
-.cmt { color: var(--muted); font-size: 12px; font-style: italic; padding: 0 6px; }
-</style>

@@ -1,4 +1,8 @@
-/* Tokens, base type and controls, shared by every page. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens: Tailwind's colours (tailwind.config.js) are these variables. */
 :root {
   --bg: #f7f6f3; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #dddbd5;
   --accent: #c2410c; --accent-soft: #fde7da; --beat: #fb923c; --loop: #dbeafe; --loop-line: #3b82f6;
@@ -16,12 +20,20 @@
   --accent: #fb923c; --accent-soft: #3a2416; --beat: #f97316; --loop: #172554; --loop-line: #60a5fa;
   --chord: #fdba74; --warn-bg: #422006; --warn-ink: #fde68a;
 }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-h1 { font-size: 17px; margin: 0; }
-button, select { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
-button.on { background: var(--accent-soft); border-color: var(--accent); }
-button:disabled { cursor: default; }
-.warn { background: var(--warn-bg); color: var(--warn-ink); padding: 8px 16px; font-size: 13px; }
+
+/* Element defaults, on top of Tailwind's reset. */
+@layer base {
+  body { @apply bg-bg font-sans text-15 text-ink; line-height: 1.45; }
+  h1 { @apply text-17 font-bold; }
+  button, select { @apply cursor-pointer rounded-md border border-line bg-bg px-2.5 py-[5px] text-13 text-ink; }
+  button:disabled { @apply cursor-default; }
+  kbd, code { @apply rounded-[3px] border border-line px-1 font-mono text-11 leading-[normal]; }
+}
+
+/* The few things with a name. Everything else is utilities in the templates. */
+@layer components {
+  .btn-on { @apply border-accent bg-accent-soft; }                    /* a toggle that is on */
+  .warn { @apply bg-warn-bg px-4 py-2 text-13 text-warn-ink; }        /* a message that needs attention */
+  .field { @apply mb-2 rounded-md border border-line bg-bg px-2.5 py-[7px] text-ink
+    focus:outline focus:outline-2 focus:-outline-offset-1 focus:outline-accent; }
+}

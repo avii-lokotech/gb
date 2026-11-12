@@ -90,68 +90,47 @@ function logout() {
 </script>
 
 <template>
-  <header>
+  <header class="flex flex-wrap items-center gap-4 border-b border-line bg-panel px-4 py-2.5">
     <h1>Guitar Book</h1>
-    <button class="upload" :disabled="!!uploading" @click="fileInput.click()">{{ uploading ? 'Uploading…' : 'Upload song' }}</button>
+    <button class="border-accent bg-accent-soft font-semibold disabled:opacity-60" :disabled="!!uploading" @click="fileInput.click()">
+      {{ uploading ? 'Uploading…' : 'Upload song' }}
+    </button>
     <input ref="fileInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.aac" multiple hidden @change="upload">
-    <span class="who">{{ auth.state.user?.name || auth.state.user?.email }}</span>
+    <span class="ml-auto text-13 text-muted">{{ auth.state.user?.name || auth.state.user?.email }}</span>
     <button @click="logout">Sign out</button>
   </header>
-  <p v-if="error" class="warn" role="alert">{{ error }}</p>
-  <main>
-    <p v-if="uploading" class="note">Uploading {{ uploading }}…</p>
-    <p v-if="loading" class="note">Loading…</p>
-    <p v-else-if="!songs.length && !error" class="note">
+  <p v-if="error" class="warn my-[13px]" role="alert">{{ error }}</p>
+  <main class="mx-auto max-w-[760px] p-4">
+    <p v-if="uploading" class="my-[15px] text-muted">Uploading {{ uploading }}…</p>
+    <p v-if="loading" class="my-[15px] text-muted">Loading…</p>
+    <p v-else-if="!songs.length && !error" class="my-[15px] text-muted">
       No songs yet. Upload a recording (mp3, m4a, wav, flac, ogg or aac, at most 40 MB): its chords, lyrics and timing
       are worked out from it, which takes a few minutes.
     </p>
-    <ul v-else class="songs">
-      <li v-for="song in sorted" :key="song.id">
-        <button class="star" :class="{ on: song.favourite }" :aria-pressed="song.favourite"
-          :title="song.favourite ? 'Remove from favourites' : 'Add to favourites'" @click="toggleFavourite(song)">
+    <ul v-else class="rounded-[10px] border border-line bg-panel">
+      <li v-for="song in sorted" :key="song.id" class="flex items-center border-t border-line first:border-t-0">
+        <button class="border-0 bg-transparent py-2.5 pl-3.5 pr-1.5 text-17 leading-none" :class="song.favourite ? 'text-accent' : 'text-muted'"
+          :aria-pressed="song.favourite" :title="song.favourite ? 'Remove from favourites' : 'Add to favourites'" @click="toggleFavourite(song)">
           {{ song.favourite ? '★' : '☆' }}
         </button>
-        <component :is="song.status === 'ready' ? 'RouterLink' : 'div'" class="song"
+        <component :is="song.status === 'ready' ? 'RouterLink' : 'div'"
+          class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1.5 px-1.5 py-2.5 text-inherit no-underline"
+          :class="{ group: song.status === 'ready' }"
           :to="song.status === 'ready' ? { name: 'player', query: { id: song.id } } : undefined">
-          <span class="title">{{ song.title }}</span>
-          <span v-if="song.status !== 'ready'" class="status" :class="song.status">{{ STATUS[song.status] }}</span>
-          <span class="detail">{{ detail(song) }}</span>
+          <span class="font-semibold group-hover:text-accent">{{ song.title }}</span>
+          <span v-if="song.status !== 'ready'" class="rounded-full px-2 py-px text-12"
+            :class="song.status === 'failed' ? 'bg-warn-bg text-warn-ink' : 'bg-accent-soft text-chord'">{{ STATUS[song.status] }}</span>
+          <span class="ml-auto text-right text-13 text-muted">{{ detail(song) }}</span>
         </component>
-        <span class="actions">
-          <button v-if="song.status === 'failed'" @click="retry(song)">Try again</button>
+        <span class="flex gap-1.5 pl-1.5 pr-3.5">
+          <button v-if="song.status === 'failed'" class="px-2 py-[3px] text-12 text-muted" @click="retry(song)">Try again</button>
           <template v-if="confirming === song.id">
-            <button class="danger" @click="remove(song)">Delete for good</button>
-            <button @click="confirming = null">Keep</button>
+            <button class="border-warn-ink bg-warn-bg px-2 py-[3px] text-12 text-warn-ink" @click="remove(song)">Delete for good</button>
+            <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = null">Keep</button>
           </template>
-          <button v-else @click="confirming = song.id">Delete</button>
+          <button v-else class="px-2 py-[3px] text-12 text-muted" @click="confirming = song.id">Delete</button>
         </span>
       </li>
     </ul>
   </main>
 </template>
-
-<style scoped>
-header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 16px;
-  align-items: center; flex-wrap: wrap; }
-.upload { font-weight: 600; background: var(--accent-soft); border-color: var(--accent); }
-.upload:disabled { opacity: .6; }
-.who { margin-left: auto; color: var(--muted); font-size: 13px; }
-main { max-width: 760px; margin: 0 auto; padding: 16px; }
-.note { color: var(--muted); }
-.songs { list-style: none; margin: 0; padding: 0; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 10px; }
-.songs li { display: flex; align-items: center; }
-.songs li + li { border-top: 1px solid var(--line); }
-.star { border: 0; background: none; font-size: 17px; line-height: 1; padding: 10px 6px 10px 14px; color: var(--muted); }
-.star.on { color: var(--accent); background: none; }
-.song { flex: 1; min-width: 0; display: flex; gap: 6px 12px; align-items: baseline; flex-wrap: wrap;
-  padding: 10px 6px; color: inherit; text-decoration: none; }
-a.song:hover .title { color: var(--accent); }
-.title { font-weight: 600; }
-.status { font-size: 12px; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--chord); }
-.status.failed { background: var(--warn-bg); color: var(--warn-ink); }
-.detail { color: var(--muted); font-size: 13px; margin-left: auto; text-align: right; }
-.actions { display: flex; gap: 6px; padding: 0 14px 0 6px; }
-.actions button { font-size: 12px; padding: 3px 8px; color: var(--muted); }
-.actions .danger { color: var(--warn-ink); background: var(--warn-bg); border-color: var(--warn-ink); }
-</style>
