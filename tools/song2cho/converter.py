@@ -94,8 +94,11 @@ def convert(site, job, keep):
             if mp3.exists():
                 site.call("PUT", f"track/{song}/{track}", mp3.read_bytes(), "audio/mpeg")
         timing = out / f"{name}.sync.json"
+        # The {x_audio: …} lines name this machine's files; on the site the tracks are the song's own.
+        text = "\n".join(l for l in cho.read_text(encoding="utf-8").split("\n")
+                         if not l.startswith(("{x_audio:", "{x_instrumental:", "{x_rhythm:")))
         site.call("POST", f"done/{song}", {
-            "cho": cho.read_text(encoding="utf-8"),
+            "cho": text,
             "sync": json.loads(timing.read_text(encoding="utf-8")) if timing.exists() else None,
         })
         logfile.unlink()

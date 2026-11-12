@@ -1,6 +1,6 @@
 // The logged-in user's songs (table song, and their audio in the bucket). Every query is scoped by user_id:
 // another user's song answers "not found".
-import { Args, Ctx, Fail, MAX_AUDIO_BYTES, Track, audio, id, invalid, iso, json, notFound, objectKey } from "../util";
+import { Args, Ctx, Fail, MAX_AUDIO_BYTES, MAX_CHO_CHARS, Track, audio, directive, id, invalid, iso, json, notFound, objectKey } from "../util";
 
 type Row = {
     id: number;
@@ -9,6 +9,7 @@ type Row = {
     status: string;
     error: string;
     cho: string | null;
+    cho_draft: string | null;
     sync: string | null;
     has_instrumental: number;
     has_rhythm: number;
@@ -24,7 +25,7 @@ const LIST = "id, title, artist, status, error, has_instrumental, has_rhythm, fa
 
 // status: uploaded (waiting for the converter), converting, ready, or failed with error.
 // loop is [first bar, last bar], counted from 0, or null for none.
-const shape = (r: Omit<Row, "cho" | "sync">) => ({
+const shape = (r: Omit<Row, "cho" | "cho_draft" | "sync">) => ({
     id: r.id,
     title: r.title,
     artist: r.artist,
@@ -57,11 +58,26 @@ export async function listSongs(c: Ctx) {
     return { songs: results.map(shape) };
 }
 
-// { id } → the song with cho (the ChordPro text) and sync (the timing: { beats, bars, lines }); both null until
-// converted, sync also when the conversion made none.
+// { id } → the song with cho (the ChordPro text in use), draft (the text the conversion made, before any edit)
+// and sync (the timing: { beats, bars, lines }); all null until converted, sync also when the conversion made none.
 export async function getSong(c: Ctx, a: Args) {
-    const row = await find(c, songId(a), `${LIST}, cho, sync`);
-    return { ...shape(row), cho: row.cho, sync: row.sync === null ? null : JSON.parse(row.sync) };
+    const row = await find(c, songId(a), `${LIST}, cho, cho_draft, sync`);
+    return { ...shape(row), cho: row.cho, draft: row.cho_draft, sync: row.sync === null ? null : JSON.parse(row.sync) };
+}
+
+// { id, cho }: the user's edit of a converted song's text. Title and artist follow its {title: …} and
+// {artist: …}. The draft and the timing stay. → the song.
+export async function saveSongText(c: Ctx, a: Args) {
+    const row = await find(c, songId(a));
+    if (row.status !== "ready") throw new Fail(409, "Only a converted song can be edited.");
+    const cho = a.cho;
+    if (typeof cho !== "string" || !cho.trim()) throw invalid("The song's text is empty.");
+    if (cho.length > MAX_CHO_CHARS) throw invalid("The song's text is too long.");
+    row.title = directive(cho, "title") || row.title;
+    row.artist = directive(cho, "artist");
+    await c.db.prepare("UPDATE song SET cho = ?3, title = ?4, artist = ?5, updated_at = ?6 WHERE id = ?1 AND user_id = ?2")
+        .bind(row.id, c.user, cho, row.title, row.artist, c.now).run();
+    return shape(row);
 }
 
 // { id, favourite?, speed?, loop?, played? } → the song after the change. Omitted is unchanged; loop null clears

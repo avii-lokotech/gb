@@ -67,8 +67,16 @@ SALT="$(printf '%s' "$SALT_HEX" | xxd -r -p | base64)"
 ACCOUNT="${CLOUDFLARE_ACCOUNT_ID:-}"
 if [[ -z "$ACCOUNT" ]]; then
     ACCOUNTS="$(curl -s --max-time 30 -H "Authorization: Bearer $TOKEN" "$API/accounts")"
+    if [[ "$(jq -r '.success' <<<"$ACCOUNTS" 2>/dev/null)" != true ]]; then
+        echo "Cloudflare refused the token: $(jq -r '[.errors[]?.message] | join("; ")' <<<"$ACCOUNTS" 2>/dev/null || echo "$ACCOUNTS")" >&2
+        exit 1
+    fi
     N="$(jq -r '.result | length' <<<"$ACCOUNTS")"
-    [[ "$N" == 1 ]] || { echo "set CLOUDFLARE_ACCOUNT_ID: the token sees $N accounts" >&2; exit 1; }
+    if [[ "$N" != 1 ]]; then
+        echo "the token sees $N accounts: give it Account Settings Read, or set CLOUDFLARE_ACCOUNT_ID (the account" >&2
+        echo "id is in the dashboard's address, dash.cloudflare.com/<account id>/..., and on the Workers & Pages page)" >&2
+        exit 1
+    fi
     ACCOUNT="$(jq -r '.result[0].id' <<<"$ACCOUNTS")"
 fi
 

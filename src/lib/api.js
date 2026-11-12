@@ -89,8 +89,11 @@ export const api = {
 
   // → { songs: [...] }: the user's songs, by title.
   listSongs: () => req('listSongs'),
-  // → the song with cho (the ChordPro text) and sync (the timing); both null until converted.
+  // → the song with cho (the ChordPro text in use), draft (the text as converted) and sync (the timing); all null
+  // until converted.
   getSong: (id) => req('getSong', { id }),
+  // The user's edit of the song's text; title and artist follow its directives. → the song.
+  saveSongText: (id, cho) => req('saveSongText', { id, cho }),
   // file: a File (a recording). → the new song, waiting for the converter.
   uploadSong: (file) => raw('/api/uploadSong', {
     method: 'POST',

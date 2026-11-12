@@ -4,13 +4,12 @@
 //   POST /api/converter/claim                       → { job: { id, title, file_name } } (now converting), or { job: null }
 //   GET  /api/converter/source/<id>                 → the uploaded recording
 //   PUT  /api/converter/track/<id>/<instrumental|rhythm>   body: the track, an mp3
-//   POST /api/converter/done/<id>   { cho, sync }   → ready; title and artist are taken from cho
+//   POST /api/converter/done/<id>   { cho, sync }   → ready; title and artist are taken from cho, which is also kept as the draft
 //   POST /api/converter/fail/<id>   { error }       → failed, with a sentence for the user
 // A song claimed and not finished within STALE_MS is handed out again. A song deleted meanwhile answers 404.
-import { Env, Fail, MAX_AUDIO_BYTES, audio, id, invalid, isTrack, json, notFound, objectKey } from "./util";
+import { Env, Fail, MAX_AUDIO_BYTES, MAX_CHO_CHARS, audio, directive, id, invalid, isTrack, json, notFound, objectKey } from "./util";
 
 const STALE_MS = 30 * 60 * 1000;
-const MAX_CHO_CHARS = 500_000;
 const MAX_SYNC_CHARS = 1_500_000;
 
 // Without the secret (not yet set with wrangler secret put CONVERTER_TOKEN) no converter is accepted.
@@ -32,9 +31,6 @@ async function claimed(env: Env, song: number): Promise<Job> {
     if (!job) throw notFound("Job");
     return job;
 }
-
-const directive = (cho: string, name: string): string =>
-    new RegExp(`^\\s*\\{${name}:\\s*(.*?)\\s*\\}\\s*$`, "m").exec(cho)?.[1].slice(0, 200) ?? "";
 
 export async function converter(request: Request, env: Env, path: string): Promise<Response> {
     if (!allowed(request, env)) return json(401, { error: "Converter token missing or wrong." });
@@ -92,7 +88,7 @@ export async function converter(request: Request, env: Env, path: string): Promi
             env.SONGS.head(objectKey(job.user_id, song, "rhythm")),
         ]);
         const done = await env.DB.prepare(
-            `UPDATE song SET status = 'ready', error = '', cho = ?2, sync = ?3, title = ?4, artist = ?5,
+            `UPDATE song SET status = 'ready', error = '', cho = ?2, cho_draft = ?2, sync = ?3, title = ?4, artist = ?5,
                  has_instrumental = ?6, has_rhythm = ?7, updated_at = ?8
              WHERE id = ?1 AND status = 'converting' RETURNING id`,
         ).bind(song, cho, syncText, directive(cho, "title") || job.title, directive(cho, "artist"),

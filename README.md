@@ -13,8 +13,9 @@ player. Songs are not in this repo.
 - `worker/` — the Worker; only `/api/*` reaches it. `POST /api/login` returns a JWT; `POST /api/<op>` runs one op
   (`worker/ops/`) for the logged-in user; `POST /api/uploadSong` and `GET /api/audio/<id>/<track>` carry the audio;
   `/api/converter/*` is the converter's side of the queue, with its own token (`worker/converter.ts`).
-- `migrations/` — the D1 schema: `user` (the logins) and `song` (per user: title, artist, the ChordPro text, the
-  timing, the conversion's status, and the user's favourite, speed, practice loop and last played).
+- `migrations/` — the D1 schema: `user` (the logins) and `song` (per user: title, artist, the ChordPro text in use
+  and as converted, the timing, the conversion's status, and the user's favourite, speed, practice loop and last
+  played).
 - R2 holds the audio: `songs/<user id>/<song id>/source` (the upload), `instrumental.mp3` and `rhythm.mp3`.
 - `tools/song2cho/` — the conversion (Demucs, beat_this, chords, Whisper; Apple GPU) and the converter around it.
 - `tools/player/` — the original single-file player, for song2cho's own output in `songs/` (git-ignored) without
@@ -61,6 +62,14 @@ results and asks again; stop it with Ctrl-C. A song that fails shows the reason 
 full output stays in `tools/song2cho/work/queue/job-<id>.log`. A song claimed and not finished within 30 minutes is
 handed out again. Whoever has the token can read every uploaded recording and write any song's result, so it stays
 on that Mac.
+
+## Editing a song
+
+The conversion is a draft: check it by ear. **Edit** in the player opens the song's ChordPro text under the sheet,
+which follows what is typed; the player keeps working, so a bar can be looped while it is corrected. Save stores
+the text (title and artist follow its `{title: …}` and `{artist: …}`); **Converted draft** brings back what the
+conversion made. The timing is not edited: the text must keep the recording's number of bars and lyric lines, and
+the sheet says so when it does not.
 
 ## Users
 

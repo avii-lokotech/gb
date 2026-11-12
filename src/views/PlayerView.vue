@@ -3,8 +3,9 @@
 // with a loop, a click, tempo, vocals off / drums & bass tracks and the beat offset (measured, tapped or nudged).
 // The song comes from the API: its ChordPro text, its timing and up to three tracks (the recording, vocals
 // removed, drums and bass). Speed and loop are saved with the song; the beat offset belongs to this device and
-// stays in its localStorage.
+// stays in its localStorage. Edit opens the song's text next to the sheet, which follows what is typed.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import SongSheet from '../components/SongSheet.vue';
 import { api, errorMessage } from '../lib/api';
 import { measureNode, waveOf } from '../lib/measure.js';
@@ -186,6 +187,7 @@ async function load() {
       warn.value = data.status === 'failed' ? `The conversion failed: ${data.error}` : 'This song is not converted yet.';
       return;
     }
+    savedCho.value = data.cho; draftCho = data.draft ?? data.cho;
     song = parseCho(data.cho); sync = data.sync;
     applySong();
     restoreSetting(data);
@@ -205,6 +207,53 @@ async function load() {
     warn.value = errorMessage(e);
   }
 }
+
+/* ---------------- editing the song's text ---------------- */
+// The editor holds the ChordPro text; the sheet is laid out again from it while typing, so a wrong bar count
+// shows at once. Nothing is stored until Save. Cancel goes back to the stored text; "Converted draft" puts the
+// text the conversion made in the editor.
+const editing = ref(false), editText = ref(''), savedCho = ref(''), saving = ref(false), editNote = ref('');
+let draftCho = '', previewTimer = null;
+const dirty = computed(() => editing.value && editText.value !== savedCho.value);
+function preview(text) {
+  clearTimeout(previewTimer);
+  song = parseCho(text); applySong();
+}
+function startEdit() {
+  if (!layout.value) return;
+  editText.value = savedCho.value; editNote.value = ''; editing.value = true;
+}
+function onEditInput(e) {
+  editText.value = e.target.value; editNote.value = '';
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => preview(editText.value), 300);
+}
+function useDraft() {
+  editText.value = draftCho; editNote.value = 'This is the text as converted. Save to keep it.';
+  preview(draftCho);
+}
+function cancelEdit() {
+  editing.value = false; editNote.value = '';
+  preview(savedCho.value);
+}
+async function saveEdit() {
+  saving.value = true; editNote.value = '';
+  try {
+    const text = editText.value;
+    await api.saveSongText(props.id, text);
+    savedCho.value = text; preview(text);
+    editNote.value = 'Saved.';
+  } catch (e) {
+    editNote.value = errorMessage(e);
+  } finally {
+    saving.value = false;
+  }
+}
+onBeforeRouteLeave(() => {
+  if (!dirty.value) return true;
+  editNote.value = 'The text has changes that are not saved: Save or Cancel first.';
+  return false;
+});
 
 /* ---------------- the user's setting of the song ---------------- */
 let settingReady = false, pending = null, saveTimer = null, playedSaved = false, savedLoop = 'null';
@@ -255,7 +304,7 @@ function setSpeed(v) {
 function toggleLoop() { if (loopB.value !== null) loopOn.value = !loopOn.value; }
 
 function onKey(e) {
-  if (e.target.matches('input, select') || e.metaKey || e.ctrlKey) return;
+  if (e.target.matches('input, select, textarea') || e.metaKey || e.ctrlKey) return;
   const k = e.key;
   if (k === ' ') { e.preventDefault(); if (tapMode.value) tap(); else togglePlay(); }
   else if (k === 'Escape' && tapMode.value) stopTapSync();
@@ -409,7 +458,7 @@ onBeforeUnmount(() => {
   gone = true;
   document.removeEventListener('keydown', onKey);
   cancelAnimationFrame(frame);
-  clearTimeout(measureTimer); clearTimeout(tapTimer);
+  clearTimeout(measureTimer); clearTimeout(tapTimer); clearTimeout(previewTimer);
   flushSetting();
   audio.value?.pause();
   for (const src of Object.values(sources)) if (src) URL.revokeObjectURL(src.url);
@@ -456,6 +505,7 @@ onBeforeUnmount(() => {
       </button>
       <button title="F" :class="{ on: follow }" @click="follow = !follow">Follow</button>
       <button title="P" :class="{ on: sounding }" :disabled="!capo" @click="sounding = !sounding">{{ pitchText }}</button>
+      <button title="Correct the chords and lyrics" :class="{ on: editing }" :disabled="!layout" @click="editing ? cancelEdit() : startEdit()">Edit</button>
       <button class="syncBtn" :class="{ on: tapMode }" title="S: tap the space bar on every beat to sync" @click="toggleTapSync">
         {{ tapMode ? 'Tapping… (Esc)' : 'Tap to sync' }}
       </button>
@@ -482,6 +532,21 @@ onBeforeUnmount(() => {
   <div v-if="warn" class="warn">{{ warn }}</div>
   <SongSheet v-if="layout" :layout="layout" :sounding="sounding" :cur-bar="curBar" :cur-cell="curCell" :cur-line="curLine"
     :loop="loopRange" :follow="follow" :playing="playing" @seek-bar="seekBar" @seek-line="seekLine" />
+  <template v-if="editing">
+    <div class="editspace"></div>
+    <section class="editor" aria-label="The song's text">
+      <div class="editbar">
+        <button class="save" :disabled="saving || !dirty" @click="saveEdit">{{ saving ? 'Saving…' : 'Save' }}</button>
+        <button :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</button>
+        <button :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</button>
+        <span class="editnote" role="status">{{ editNote }}</span>
+        <span class="edithelp">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
+          In the lyrics <code>[Am]</code> puts a chord before a word. Keep the number of bars and of lyric lines.</span>
+      </div>
+      <textarea :value="editText" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="ChordPro text"
+        @input="onEditInput"></textarea>
+    </section>
+  </template>
   <audio ref="audio" preload="auto" @play="onPlay" @pause="playing = false" @playing="scheduleMeasure"
     @seeked="onSeeked" @ratechange="updateOffset"></audio>
 </template>
@@ -522,5 +587,19 @@ button.play { min-width: 74px; font-weight: 600; }
 .tapbanner .dots i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent); display: inline-block; }
 .tapbanner .dots i.on { background: var(--accent); }
 .tapbanner .sub { font-size: 12px; color: var(--muted); }
+/* the editor: a drawer over the bottom of the page; editspace keeps the end of the sheet reachable above it */
+.editspace { height: 42vh; }
+.editor { position: fixed; left: 0; right: 0; bottom: 0; height: 40vh; z-index: 6; display: flex; flex-direction: column;
+  background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgb(0 0 0 / .18); }
+.editbar { display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; padding: 8px 16px; }
+.editbar .save { font-weight: 600; background: var(--accent-soft); border-color: var(--accent); }
+.editbar button:disabled { opacity: .45; }
+.editnote { font-size: 13px; color: var(--accent); }
+.edithelp { font-size: 12px; color: var(--muted); margin-left: auto; }
+.edithelp code { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.editor textarea { flex: 1; min-height: 0; width: 100%; resize: none; border: 0; border-top: 1px solid var(--line);
+  padding: 10px 16px; background: var(--bg); color: var(--ink); font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre; overflow: auto; tab-size: 4; }
+.editor textarea:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
 </style>

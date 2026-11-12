@@ -32,6 +32,11 @@ export type Track = keyof typeof TRACKS;
 export const isTrack = (v: string): v is Track => Object.hasOwn(TRACKS, v);
 export const objectKey = (user: number, song: number, track: Track) => `songs/${user}/${song}/${TRACKS[track]}`;
 
+// The largest ChordPro text taken, and the value of its {name: …} directive ("" when it has none).
+export const MAX_CHO_CHARS = 500_000;
+export const directive = (cho: string, name: string): string =>
+    new RegExp(`^\\s*\\{${name}:\\s*(.*?)\\s*\\}\\s*$`, "m").exec(cho)?.[1].slice(0, 200) ?? "";
+
 // The largest recording taken, and the largest track the converter may send back.
 export const MAX_AUDIO_BYTES = 40 * 1024 * 1024;
 
