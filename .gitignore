@@ -6,3 +6,13 @@
 chordpro/
 
 .DS_Store
+
+# Dependencies, build output and wrangler state (dist/ and .wrangler/ are empty mount points locally)
+node_modules/
+dist/
+.wrangler/
+
+# song2cho: its Python environment, intermediate files and bytecode
+tools/song2cho/.venv/
+tools/song2cho/work/
+__pycache__/

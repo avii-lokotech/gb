@@ -1,0 +1,29 @@
+{
+  "name": "gb",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-19",
+  // wrangler deploy (Workers Builds) and wrangler dev run this first: the site into dist/, then the typecheck.
+  "build": { "command": "npm run build", "watch_dir": ["src", "worker", "songs", "index.html"] },
+  // The SPA is served from dist/ as is. The Worker runs for /api/* and for the song files (songs/ and the
+  // recordings in the root), which it hands out from ASSETS to a logged-in user only.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/songs/*", "/*.mp3"]
+  },
+  // Custom Domain: the zone gb-songs.com must be active in this Cloudflare account; the deploy creates the DNS
+  // record and certificate. No workers.dev URL.
+  "routes": [{ "pattern": "www.gb-songs.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gb-db",
+      "database_id": "4b86277f-935a-4936-8558-6366d355e2b3",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+}

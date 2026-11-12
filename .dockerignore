@@ -1,0 +1,4 @@
+# The image needs only the dependency manifests.
+*
+!package.json
+!package-lock.json

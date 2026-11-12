@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Song Player</title>
+<style>
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #dddbd5;
+  --accent: #c2410c; --accent-soft: #fde7da; --beat: #fb923c; --loop: #dbeafe; --loop-line: #3b82f6;
+  --chord: #9a3412; --warn-bg: #fef3c7; --warn-ink: #78350f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141414; --panel: #1e1e1f; --ink: #ececec; --muted: #9a9aa0; --line: #333336;
+    --accent: #fb923c; --accent-soft: #3a2416; --beat: #f97316; --loop: #172554; --loop-line: #60a5fa;
+    --chord: #fdba74; --warn-bg: #422006; --warn-ink: #fde68a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141414; --panel: #1e1e1f; --ink: #ececec; --muted: #9a9aa0; --line: #333336;
+  --accent: #fb923c; --accent-soft: #3a2416; --beat: #f97316; --loop: #172554; --loop-line: #60a5fa;
+  --chord: #fdba74; --warn-bg: #422006; --warn-ink: #fde68a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: 10px 16px; }
+.top { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+h1 { font-size: 17px; margin: 0; }
+.meta { color: var(--muted); font-size: 13px; }
+.controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+button, select { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button.on { background: var(--accent-soft); border-color: var(--accent); }
+button#play { min-width: 74px; font-weight: 600; }
+#time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 92px; }
+#seek { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.now { display: flex; gap: 22px; align-items: baseline; margin-left: auto; }
+.now .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+#nowChord { font-size: 30px; font-weight: 700; color: var(--chord); min-width: 2.5ch; display: inline-block; }
+#nextChord { font-size: 20px; font-weight: 600; }
+#nextIn { font-size: 12px; color: var(--muted); }
+#beatDots { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
+#beatDots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
+#beatDots i.on { background: var(--beat); }
+.warn { background: var(--warn-bg); color: var(--warn-ink); padding: 8px 16px; font-size: 13px; }
+.warn a { color: inherit; font-weight: 600; }
+.warn code { font: 12px ui-monospace, monospace; }
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  margin-bottom: 14px; }
+.label { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+  margin-bottom: 6px; }
+/* one row = time | the bars of a lyric line | that lyric line */
+.srow { display: grid; grid-template-columns: 44px minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 18px;
+  align-items: center; padding: 3px 0; }
+@media (max-width: 900px) {
+  .srow { grid-template-columns: 44px minmax(0, 1fr); row-gap: 2px; }
+  .srow .ln { grid-column: 2; }
+}
+.margin { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; align-self: center; }
+/* every beat is one column, so all beats are equally wide and bars are as long as their beats */
+.bars { display: grid; grid-template-columns: repeat(var(--cols, 16), minmax(0, 1fr)); align-self: stretch; }
+.bar { display: grid; border-left: 2px solid var(--line); padding: 2px 0; cursor: pointer; min-height: 34px;
+  align-content: center; }
+.bar:last-child { border-right: 2px solid var(--line); }
+.bar.cur { background: var(--accent-soft); }
+.bar.inloop { background: var(--loop); }
+.bar.cur.inloop { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--loop-line); }
+.cell { padding: 4px 3px; font-weight: 600; color: var(--chord); font-size: 14px;
+  border-radius: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.cell.dot { color: var(--line); font-weight: 400; }
+.cell.carry { color: var(--muted); }
+.cell.beat { outline: 2px solid var(--beat); outline-offset: -2px; }
+.strumrow { grid-column: 1 / -1; display: grid; }
+.strum { font-size: 12px; color: var(--muted); white-space: nowrap; padding: 0 3px; overflow: hidden; }
+/* lyrics with chords above the words */
+.ln { padding: 3px 6px; border-radius: 6px; display: flex; flex-wrap: wrap; align-items: flex-end; min-width: 0; }
+.ln[data-line] { cursor: pointer; }
+.ln[data-line]:hover { background: var(--bg); }
+.ln.cur { background: var(--accent-soft); }
+.chunk { display: inline-flex; flex-direction: column; white-space: pre; }
+.chunk .c { color: var(--chord); font-weight: 700; font-size: 13px; min-height: 1.2em; padding-right: 4px; }
+.chunk .t { min-height: 1.3em; }
+.cmt { color: var(--muted); font-size: 12px; font-style: italic; padding: 0 6px; }
+.help { color: var(--muted); font-size: 12px; margin-top: 6px; }
+#syncStatus { font-size: 12px; color: var(--muted); }
+.offbox { display: inline-flex; align-items: center; gap: 4px; }
+.offlbl { font-size: 12px; color: var(--muted); }
+.offbox button { min-width: 30px; font-weight: 700; }
+#offReset { font-weight: 400; }
+#offReset:disabled { opacity: .45; cursor: default; }
+#offVal { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 58px; text-align: center; }
+#offVal.nonzero { color: var(--accent); font-weight: 600; }
+#syncStatus.ok { color: #16a34a; }
+#syncBtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tapbanner { margin-top: 8px; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft);
+  border: 1px solid var(--accent); font-size: 15px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.tapbanner[hidden] { display: none; }
+.tapbanner .dots { display: inline-flex; gap: 5px; }
+.tapbanner .dots i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent); display: inline-block; }
+.tapbanner .dots i.on { background: var(--accent); }
+.tapbanner .sub { font-size: 12px; color: var(--muted); }
+kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div>
+      <h1 id="title">Loading…</h1>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="now">
+      <div><div class="lbl">Now <span id="beatDots"></span></div><span id="nowChord">–</span></div>
+      <div><div class="lbl">Next</div><span id="nextChord">–</span> <span id="nextIn"></span></div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="play" title="Space">▶ Play</button>
+    <span id="time">0:00 / 0:00</span>
+    <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Position">
+    <select id="speed" title="[ and ] to change">
+      <option value="0.5">50%</option><option value="0.6">60%</option><option value="0.7">70%</option>
+      <option value="0.75">75%</option><option value="0.85">85%</option><option value="0.9">90%</option>
+      <option value="1" selected>100%</option>
+    </select>
+    <button id="loopBtn" title="L">Loop</button>
+    <button id="clickBtn" title="C">Click</button>
+    <button id="vocalBtn" title="V: mute or unmute the vocals" disabled>Vocals on</button>
+    <button id="rhythmBtn" title="B: play only the drums and bass" disabled>Drums &amp; bass</button>
+    <button id="followBtn" class="on" title="F">Follow</button>
+    <button id="pitchBtn" title="P">Shapes</button>
+    <button id="reloadBtn" title="R">Reload .cho</button>
+    <button id="syncBtn" title="S: tap the space bar on every beat to sync">Tap to sync</button>
+    <span class="offbox" title="How much later the beats start than the audio">
+      <span class="offlbl">Beats</span>
+      <button id="offMinus" title="Beats 10 ms earlier (− key)">−</button>
+      <span id="offVal">0 ms</span>
+      <button id="offPlus" title="Beats 10 ms later (+ key)">+</button>
+      <button id="offReset" title="Back to 0 ms: audio and beats start together">Reset</button>
+    </span>
+    <span id="syncStatus"></span>
+  </div>
+  <div class="help">Click a bar, lyric line or time to jump · <kbd>Shift</kbd>+click a bar to loop from the last clicked bar ·
+    <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> bar · <kbd>L</kbd> loop · <kbd>C</kbd> click · <kbd>V</kbd> vocals · <kbd>B</kbd> drums &amp; bass · <kbd>R</kbd> reload after editing · <kbd>S</kbd> tap to sync · <kbd>−</kbd>/<kbd>+</kbd> beats 10 ms earlier/later</div>
+  <div id="tapInfo" class="tapbanner" hidden></div>
+</header>
+<div id="warn" class="warn" hidden></div>
+<main id="main"></main>
+<audio id="audio" preload="auto"></audio>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const audio = $("audio");
+const params = new URLSearchParams(location.search);
+const FILE_MODE = location.protocol === "file:";
+const songParam = params.get("song") || "songs/Madeline.cho";
+// song paths are relative to the server root (the guitarbook folder)
+const songPath = FILE_MODE ? songParam : new URL(songParam, location.origin).href;
+
+let song = null, sync = null;
+let barEls = [];          // barEls[k] = element of bar k
+let barCols = [];         // barCols[k] = its grid cells
+let curCol = null;        // highlighted beat column
+let lineEls = [];
+let beatChord = [];       // effective chord per beat (as written)
+let loopA = null, loopB = null, loopOn = false;
+let follow = true, clickOn = false, sounding = false;
+let curBar = -1, curBeat = -1, curLine = -1;
+
+/* ---------------- ChordPro parsing (subset used by song2cho) ---------------- */
+const BAR_RE = /^(\|\||\|\.|\|:|:\|:|:\||\||:?\|\d+>?)([sS])?$/;
+
+function parseAttrs(s) {
+  const o = {}; const re = /(\w+)="([^"]*)"/g; let m;
+  while ((m = re.exec(s))) o[m[1]] = m[2];
+  return o;
+}
+
+function parseCho(text) {
+  const meta = {}; const blocks = []; let cur = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/\s+$/, "");
+    const d = line.match(/^\s*\{([\w-]+)(?:[:\s]\s*(.*))?\}\s*$/);
+    if (d) {
+      const name = d[1].toLowerCase(), arg = (d[2] || "").trim();
+      const so = name.match(/^(?:start_of_|so)(grid|verse|chorus|bridge|tab|g|v|c|b)$/);
+      const eo = name.match(/^(?:end_of_|eo)(grid|verse|chorus|bridge|tab|g|v|c|b)$/);
+      if (so) {
+        const kind = { g: "grid", v: "verse", c: "chorus", b: "bridge" }[so[1]] || so[1];
+        const at = parseAttrs(arg);
+        cur = { type: kind === "grid" ? "grid" : "lyrics", env: kind, label: at.label || "", rows: [], lines: [] };
+        blocks.push(cur);
+      } else if (eo) { cur = null; }
+      else if (["comment", "c", "comment_italic", "ci"].includes(name)) {
+        blocks.push({ type: "comment", text: arg });
+      } else { meta[name] = arg; }
+      continue;
+    }
+    if (/^\s*#/.test(line)) continue;              // ChordPro comment
+    if (cur && cur.type === "grid") { if (line.trim()) cur.rows.push(parseGridRow(line)); continue; }
+    if (cur && cur.type === "lyrics") { if (line.trim()) cur.lines.push(parseLyric(line)); continue; }
+    if (line.trim()) {                              // lyrics outside a section
+      cur = null;
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === "lyrics" && last.loose) last.lines.push(parseLyric(line));
+      else blocks.push({ type: "lyrics", env: "verse", label: "", loose: true, lines: [parseLyric(line)] });
+    }
+  }
+  return { meta, blocks };
+}
+
+function parseGridRow(line) {
+  const toks = line.trim().split(/\s+/);
+  const row = { bars: [], strum: false };
+  let started = false, cells = null;
+  for (const t of toks) {
+    const m = t.match(BAR_RE);
+    if (m) {
+      if (m[2]) row.strum = true;
+      if (cells && cells.length) row.bars.push(cells);
+      cells = []; started = true; continue;
+    }
+    if (started) cells.push(t);                    // tokens before the first bar line: margin text
+  }
+  return row;                                      // cells after the last bar line: margin text
+}
+
+function parseLyric(line) {
+  const chunks = []; const re = /\[([^\]]*)\]/g; let last = 0, m, chord = "";
+  while ((m = re.exec(line))) {
+    const txt = line.slice(last, m.index);
+    if (txt || chord) chunks.push({ c: chord, t: txt });
+    chord = m[1]; last = re.lastIndex;
+  }
+  chunks.push({ c: chord, t: line.slice(last) });
+  return chunks.filter((c, i) => c.c || c.t || i === 0);
+}
+
+/* ---------------- chords ---------------- */
+const SH = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FL = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+function transposeChord(c, n, flats) {
+  if (!n) return c;
+  return c.replace(/(^|\/)([A-G])([#b]?)/g, (_, pre, r, acc) => {
+    let i = SH.indexOf(r + acc); if (i < 0) i = FL.indexOf(r + acc); if (i < 0) return pre + r + acc;
+    return pre + (flats ? FL : SH)[(i + n + 12) % 12];
+  });
+}
+let capo = 0, flatsSounding = false;
+function show(c) { return sounding ? transposeChord(c, capo, flatsSounding) : c; }
+const isChordToken = (t) => /^[A-G]/.test(t);
+
+/* ---------------- rendering ---------------- */
+function mmss(t) { t = Math.max(0, t); return Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0"); }
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+// which of `len` grid cells covers beat q of an n-beat bar
+function cellIdx(q, len, n) { return Math.min(len - 1, Math.floor(q * len / n)); }
+function median(arr) { const a = [...arr].sort((x, y) => x - y); return a[a.length >> 1]; }
+
+function render() {
+  const main = $("main"); main.innerHTML = "";
+  barEls = []; barCols = []; lineEls = []; curCol = null;
+  const warns = [];
+  const meta = song.meta;
+  capo = parseInt(meta.capo || "0", 10) || 0;
+  const soundingKey = transposeChord(meta.key || "C", capo, false);
+  flatsSounding = /^(F|Bb|Eb|Ab|Db|Gb|Dm|Gm|Cm|Fm|Bbm|Ebm)$/.test(soundingKey);
+  $("title").textContent = meta.title || "Untitled";
+  $("meta").textContent = [meta.artist, meta.key && ("key " + meta.key), capo ? "capo " + capo : "",
+    meta.time, meta.tempo && meta.tempo + " bpm"].filter(Boolean).join(" · ");
+  document.title = (meta.title || "Song") + " – Player";
+  $("pitchBtn").textContent = sounding ? "Sounding" : (capo ? "Shapes (capo " + capo + ")" : "Shapes");
+  $("pitchBtn").disabled = !capo;
+
+  // all bars of all grids, in order (strum rows attach to the chord row above)
+  const bars = [];
+  const blockRange = new Map();
+  song.blocks.forEach((b) => {
+    if (b.type !== "grid") return;
+    const k0 = bars.length; let rowStart = k0;
+    for (const row of b.rows) {
+      if (row.strum) { row.bars.forEach((cells, j) => { if (bars[rowStart + j]) bars[rowStart + j].strum = cells; }); continue; }
+      rowStart = bars.length;
+      row.bars.forEach((cells) => bars.push({ cells, strum: null }));
+    }
+    blockRange.set(b, [k0, bars.length]);
+  });
+  const barsMatch = !!sync && bars.length === sync.bars.length;
+
+  // beats per bar, and the effective chord for every beat (drives Now/Next)
+  beatChord = []; let prevChord = null, prevCells = null;
+  bars.forEach((bar, k) => {
+    const cells = bar.cells.join(" ") === "%" && prevCells ? prevCells : bar.cells;
+    const bt = barsMatch ? sync.bars[k] : null;
+    bar.n = bt ? bt[1] - bt[0] : cells.length;
+    for (let q = 0; q < bar.n; q++) {
+      const tok = cells[cellIdx(q, cells.length, bar.n)] || ".";
+      const cs = tok.split("~").filter(isChordToken);
+      if (cs.length) prevChord = cs[cs.length - 1];
+      if (bt) beatChord[bt[0] + q] = prevChord;
+    }
+    prevCells = cells;
+  });
+
+  // lyric lines get a global index, matching sync.lines
+  let gl = 0;
+  for (const b of song.blocks) if (b.type === "lyrics") b.gLines = b.lines.map((chunks) => ({ chunks, g: gl++ }));
+  const timed = barsMatch && gl === sync.lines.length;
+  if (sync && !barsMatch) warns.push(`The .cho grids have ${bars.length} bars but the recording has ${sync.bars.length}. ` +
+    `Add or remove bars so the counts match — until then bars and lyrics can't be lined up.`);
+  else if (sync && gl !== sync.lines.length) warns.push(`The .cho has ${gl} lyric lines but the timing file has ${sync.lines.length}; ` +
+    `bars and lyric lines can't be lined up until they match again.`);
+  if (!sync) warns.push("No .sync.json timing file found next to the song — playback works but nothing will be highlighted.");
+
+  // pair each grid with the lyrics section that follows it
+  const items = [];
+  for (let i = 0; i < song.blocks.length; i++) {
+    const b = song.blocks[i], nx = song.blocks[i + 1];
+    if (b.type === "grid" && nx && nx.type === "lyrics" && (!nx.label || nx.label === b.label)) { items.push([b, nx]); i++; }
+    else items.push([b]);
+  }
+
+  // 1. cut every section into rows: a lyric line with the bars it is sung over,
+  //    or (instrumental) up to 4 bars with no lyrics
+  const barOfT = (t) => { const i = beatAt(t); return i < 0 ? 0 : barOfBeat(i); };
+  const plain = (k0, k1, out) => { for (let k = k0; k < k1; k += 4) out.push({ k0: k, k1: Math.min(k1, k + 4) }); };
+  const sections = [];
+  for (const parts of items) {
+    if (parts[0].type === "comment") { sections.push({ comment: parts[0].text }); continue; }
+    const grid = parts[0].type === "grid" ? parts[0] : null;
+    const lyr = parts.find((p) => p.type === "lyrics");
+    const [k0, k1] = grid ? blockRange.get(grid) : [0, 0];
+    const rows = [];
+    if (grid && lyr && timed && lyr.gLines.length) {
+      const starts = lyr.gLines.map(({ g }) => {
+        const t = sync.lines[g][0];
+        let b = Math.min(k1 - 1, Math.max(k0, barOfT(t)));
+        if (beatAt(t) === sync.bars[b][1] - 1 && b + 1 < k1) b++;   // first word on a bar's last beat: a pickup
+        return b;
+      });
+      for (let i = 1; i < starts.length; i++) starts[i] = Math.min(k1 - 1, Math.max(starts[i], starts[i - 1] + 1));
+      if (starts[0] > k0) plain(k0, starts[0], rows);
+      lyr.gLines.forEach(({ chunks, g }, i) => {
+        let end = i + 1 < starts.length ? starts[i + 1] : k1, tail = null;
+        if (i + 1 === starts.length) {                // long instrumental after the last line: own rows
+          const words = sync.lines[g][2] || [];
+          const lastBar = barOfT(words.length ? words[words.length - 1][0] : sync.lines[g][1]);
+          if (end - (lastBar + 1) >= 2) { tail = [lastBar + 1, end]; end = lastBar + 1; }
+        }
+        rows.push({ k0: starts[i], k1: Math.max(end, starts[i] + 1), chunks, g });
+        if (tail) plain(tail[0], tail[1], rows);
+      });
+    } else {                                          // not lined up: bars first, then the lyrics
+      if (grid) plain(k0, k1, rows);
+      if (lyr) lyr.gLines.forEach(({ chunks, g }) => rows.push({ k0: 0, k1: 0, chunks, g }));
+    }
+    sections.push({ label: parts[0].label || parts[0].env || "", rows, lyrics: !!lyr });
+  }
+
+  // 2. one width for every beat: the grid has as many columns as the longest row has beats
+  const rowBeats = (r) => { let n = 0; for (let k = r.k0; k < r.k1; k++) n += bars[k].n; return n; };
+  let cols = 4;
+  for (const s of sections) for (const r of s.rows || []) cols = Math.max(cols, rowBeats(r));
+  main.style.setProperty("--cols", cols);
+
+  // 3. draw
+  function makeBar(k, rowFirst) {
+    const bar = bars[k];
+    const be = el("div", "bar"); be.dataset.bar = k;
+    be.style.gridColumn = "span " + bar.n;
+    be.style.gridTemplateColumns = `repeat(${bar.cells.length}, minmax(0, 1fr))`;
+    const cellEls = bar.cells.map((tok, i) => {
+      const dot = tok === "." || tok === "/";
+      const carry = rowFirst && i === 0 && dot && barsMatch && beatChord[sync.bars[k][0]];
+      const c = carry ? el("div", "cell carry", show(carry))       // chord still ringing from the row above
+        : el("div", "cell" + (dot ? " dot" : ""), tok.split("~").map((x) => isChordToken(x) ? show(x) : x).join(" "));
+      be.append(c); return c;
+    });
+    if (bar.strum) {                                  // strum pattern under the chords
+      const st = el("div", "strumrow"); st.style.gridTemplateColumns = `repeat(${bar.strum.length}, minmax(0, 1fr))`;
+      bar.strum.forEach((tok) => st.append(el("div", "strum", tok.replace(/~/g, " "))));
+      be.append(st);
+    }
+    barEls[k] = be; barCols[k] = cellEls;
+    return be;
+  }
+  for (const s of sections) {
+    if (s.comment) { main.append(el("div", "cmt", s.comment)); continue; }
+    const sec = el("section", "section" + (s.lyrics ? "" : " nolyrics"));
+    sec.append(el("div", "label", s.label));
+    for (const r of s.rows) {
+      const row = el("div", "srow");
+      const mg = el("div", "margin", r.k1 > r.k0 && barsMatch ? mmss(barStart(r.k0)) : "");
+      if (r.k1 > r.k0) mg.onclick = () => seekBar(r.k0, false);
+      const bs = el("div", "bars");
+      for (let k = r.k0; k < r.k1; k++) bs.append(makeBar(k, k === r.k0));
+      row.append(mg, bs);
+      if (s.lyrics) {
+        const d = el("div", "ln");
+        if (r.chunks) {
+          d.dataset.line = r.g; lineEls[r.g] = d;
+          for (const ch of r.chunks) {
+            const sp = el("span", "chunk");
+            sp.append(el("span", "c", ch.c ? show(ch.c) : ""), el("span", "t", ch.t || (ch.c ? " " : "")));
+            d.append(sp);
+          }
+        }
+        row.append(d);
+      }
+      sec.append(row);
+    }
+    main.append(sec);
+  }
+  $("warn").hidden = !warns.length; $("warn").textContent = warns.join(" ");
+  main.onclick = (e) => {
+    const be = e.target.closest(".bar"); if (be) return seekBar(+be.dataset.bar, e.shiftKey);
+    const ln = e.target.closest(".ln[data-line]");
+    if (ln && sync && lineEls.length === sync.lines.length) {
+      audio.currentTime = Math.max(0, sync.lines[+ln.dataset.line][0] - 0.3 - syncOffset); curBeat = -1;
+    }
+  };
+  curBar = curBeat = curLine = -1; paintLoop(); tick(true);
+}
+
+/* ---------------- sync ---------------- */
+function barStart(k) { return sync.beats[sync.bars[k][0]]; }
+function barEnd(k) { return k + 1 < sync.bars.length ? barStart(k + 1) : (audio.duration || sync.beats[sync.beats.length - 1] + 1); }
+function beatAt(t) { // index of last beat <= t
+  const b = sync.beats; let lo = 0, hi = b.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (b[m] <= t + 1e-4) { r = m; lo = m + 1; } else hi = m - 1; }
+  return r;
+}
+function barOfBeat(i) {
+  const bars = sync.bars; let lo = 0, hi = bars.length - 1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (i < bars[m][0]) hi = m - 1; else if (i >= bars[m][1]) lo = m + 1; else return m; }
+  return -1;
+}
+function seekBar(k, shift) {
+  if (!sync || k < 0 || k >= sync.bars.length) return;
+  if (shift && loopA !== null) { loopB = k; if (loopB < loopA) [loopA, loopB] = [loopB, loopA]; loopOn = true; paintLoop(); }
+  else { loopA = k; loopB = null; loopOn = false; paintLoop(); }
+  audio.currentTime = Math.max(0, barStart(k) - syncOffset);
+  curBeat = -1;
+}
+function paintLoop() {
+  document.querySelectorAll(".bar.inloop").forEach((e) => e.classList.remove("inloop"));
+  if (loopOn && loopA !== null && loopB !== null)
+    for (let k = loopA; k <= loopB; k++) barEls[k]?.classList.add("inloop");
+  $("loopBtn").classList.toggle("on", loopOn);
+  $("loopBtn").textContent = loopOn && loopB !== null ? `Loop ${loopA + 1}–${loopB + 1}` : "Loop";
+}
+
+function click(accent) {
+  try {
+    const actx = ensureGraph();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = accent ? 1600 : 1000;
+    g.gain.setValueAtTime(0.35, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.05);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.06);
+  } catch (e) { /* audio context unavailable */ }
+}
+
+let lastTimeText = "", lastSeekVal = -1;
+function tick(force) {
+  const at = audio.currentTime, t = at + syncOffset;   // t = position in the song data
+  const dur = audio.duration || 0;
+  const timeText = mmss(at) + " / " + mmss(dur);
+  if (timeText !== lastTimeText) { $("time").textContent = timeText; lastTimeText = timeText; }
+  const seekVal = dur ? Math.round(at / dur * 1000) : 0;
+  if (!seeking && seekVal !== lastSeekVal) { $("seek").value = seekVal; lastSeekVal = seekVal; }
+  if (!sync) return;
+  if (loopOn && loopB !== null && !audio.paused && t >= barEnd(loopB) - 0.01) { audio.currentTime = Math.max(0, barStart(loopA) - syncOffset); return; }
+  const i = beatAt(t);
+  if (i !== curBeat || force) {
+    const k = i >= 0 ? barOfBeat(i) : -1;
+    if (clickOn && !audio.paused && i >= 0 && i === curBeat + 1 && !force) click(k >= 0 && i === sync.bars[k][0]);
+    // bar highlight
+    if (k !== curBar) {
+      barEls[curBar]?.classList.remove("cur");
+      barEls[k]?.classList.add("cur");
+      if (follow && barEls[k] && !audio.paused) barEls[k].scrollIntoView({ block: "center", behavior: "smooth" });
+      curBar = k;
+    }
+    curCol?.classList.remove("beat"); curCol = null;
+    let pos = -1, n = 0;
+    if (k >= 0) {
+      const [s, e] = sync.bars[k]; n = e - s; pos = i - s;
+      const cols = barCols[k];
+      if (cols && cols.length) { curCol = cols[cellIdx(pos, cols.length, n)]; curCol.classList.add("beat"); }
+    }
+    // beat dots
+    const dots = $("beatDots");
+    if (dots.children.length !== n) { dots.innerHTML = ""; for (let q = 0; q < n; q++) dots.append(el("i")); }
+    [...dots.children].forEach((d, q) => d.classList.toggle("on", q === pos));
+    // now / next chord
+    const now = i >= 0 ? beatChord[i] : beatChord.find(Boolean);
+    $("nowChord").textContent = now ? show(now) : "–";
+    let j = Math.max(i, 0) + 1; while (j < beatChord.length && beatChord[j] === now) j++;
+    if (j < beatChord.length && beatChord[j]) {
+      $("nextChord").textContent = show(beatChord[j]);
+      const beatsAway = j - Math.max(i, 0);
+      $("nextIn").textContent = beatsAway <= 8 ? `in ${beatsAway} beat${beatsAway > 1 ? "s" : ""}` : `in ${Math.round(sync.beats[j] - t)}s`;
+    } else { $("nextChord").textContent = "–"; $("nextIn").textContent = ""; }
+    curBeat = i;
+  }
+  // lyric line
+  if (lineEls.length === sync.lines.length) {
+    let L = -1;
+    for (let q = 0; q < sync.lines.length; q++) {   // latest line that has started
+      const [a, b] = sync.lines[q];
+      if (a - 0.25 > t) break;
+      if (t <= b + 0.6) L = q;
+    }
+    if (L !== curLine) {
+      if (lineEls[curLine]) lineEls[curLine].classList.remove("cur");
+      if (lineEls[L]) lineEls[L].classList.add("cur");
+      curLine = L;
+    }
+  }
+}
+function loop() { tick(false); requestAnimationFrame(loop); }
+
+/* ---------------- loading ---------------- */
+async function fetchText(p) { const r = await fetch(p + (p.includes("?") ? "&" : "?") + "t=" + Date.now()); if (!r.ok) throw new Error(p + ": " + r.status); return r.text(); }
+// Versions of the song: the full mix and, optionally, the band only (vocals removed) and
+// the drums + bass only. Switching jumps to the other file at the same position.
+const sources = { mix: null, inst: null, rhythm: null };   // each {blob, url, wave}
+let curSrc = null, vocalsOn = true, rhythmOnly = false;
+function makeSource(old, blob) {
+  if (old) URL.revokeObjectURL(old.url);
+  return { blob, url: URL.createObjectURL(blob), wave: null };   // wave: reference for the sync measurement
+}
+function useSource(src, keepPosition) {
+  if (!src || src === curSrc) return;
+  const t = audio.currentTime, playing = !audio.paused, rate = audio.playbackRate;
+  curSrc = src; audio.src = src.url;
+  if (keepPosition) audio.addEventListener("loadedmetadata", () => {
+    audio.currentTime = t; audio.playbackRate = rate; audio.preservesPitch = true;
+    if (playing) audio.play();
+  }, { once: true });
+}
+function setAudio(blob) { sources.mix = makeSource(sources.mix, blob); curSrc = null; useSource(sources.mix, false); }
+function setExtra(name, blob) {                   // name: "inst" or "rhythm"
+  sources[name] = blob ? makeSource(sources[name], blob) : null;
+  if (!sources.inst) vocalsOn = true;
+  if (!sources.rhythm) rhythmOnly = false;
+  paintTracks();
+}
+function paintTracks() {
+  const v = $("vocalBtn"), r = $("rhythmBtn");
+  v.disabled = !sources.inst; r.disabled = !sources.rhythm;
+  v.textContent = vocalsOn ? "Vocals on" : "Vocals off";
+  v.classList.toggle("on", !vocalsOn && !rhythmOnly);
+  r.classList.toggle("on", rhythmOnly);
+  v.title = sources.inst ? "V: mute or unmute the vocals" : "No band-only track for this song (run song2cho.sh again to make one)";
+  r.title = sources.rhythm ? "B: play only the drums and bass" : "No drums & bass track for this song (run song2cho.sh again to make one)";
+}
+function playChosenTrack() {
+  paintTracks();
+  useSource(rhythmOnly ? sources.rhythm : vocalsOn ? sources.mix : sources.inst, true);
+}
+function toggleVocals() {
+  if (!sources.inst) return;
+  if (rhythmOnly) rhythmOnly = false; else vocalsOn = !vocalsOn;   // from drums & bass: back to the song
+  playChosenTrack();
+}
+function toggleRhythm() {
+  if (!sources.rhythm) return;
+  rhythmOnly = !rhythmOnly;
+  playChosenTrack();
+}
+const SERVER_URL = "http://localhost:8765/tools/player/?song=" + encodeURIComponent(songParam).replace(/%2F/g, "/");
+
+function showFileModeHelp() {
+  $("title").textContent = "Open the player through the local server";
+  const w = $("warn"); w.hidden = false; w.innerHTML = "";
+  const p1 = el("div");
+  p1.append("This page was opened directly from disk, so the browser won't let it read the song files. ",
+    "Run ", el("code", "", "tools/player/serve.sh"),
+    " in the guitarbook folder and open the address it prints (normally ");
+  const a = el("a", "", SERVER_URL); a.href = SERVER_URL;
+  p1.append(a, ").");
+  const p2 = el("div"); p2.style.marginTop = "6px";
+  const lbl = el("label");
+  lbl.append("Or pick the files by hand (the .cho, its .sync.json, the mp3 and optionally the .instrumental.mp3 and .rhythm.mp3): ");
+  const inp = Object.assign(document.createElement("input"), { type: "file", multiple: true,
+    accept: ".cho,.chopro,.json,audio/*" });
+  inp.onchange = () => loadPicked([...inp.files]);
+  lbl.append(inp); p2.append(lbl);
+  w.append(p1, p2);
+}
+
+async function loadPicked(files) {
+  const cho = files.find((f) => /\.cho(pro)?$/i.test(f.name));
+  const js = files.find((f) => /\.json$/i.test(f.name));
+  const audios = files.filter((f) => f.type.startsWith("audio/") || /\.(mp3|m4a|wav|ogg|flac)$/i.test(f.name));
+  const inst = audios.find((f) => /instrumental/i.test(f.name));
+  const rhythm = audios.find((f) => /rhythm/i.test(f.name));
+  const au = audios.find((f) => f !== inst && f !== rhythm);
+  if (!cho) { $("warn").hidden = false; $("warn").append(" — please include the .cho file."); return; }
+  song = parseCho(await cho.text());
+  sync = js ? JSON.parse(await js.text()) : null;
+  render();
+  if (au) { setAudio(au); setExtra("inst", inst || null); setExtra("rhythm", rhythm || null); }
+  else { $("warn").hidden = false; $("warn").textContent += " No audio file picked."; }
+}
+
+async function load(first) {
+  if (FILE_MODE) { showFileModeHelp(); return; }
+  try {
+    const cho = await fetchText(songPath);
+    song = parseCho(cho);
+    try { sync = JSON.parse(await fetchText(songPath.replace(/\.cho$/, "") + ".sync.json")); } catch (e) { sync = null; }
+    render();
+    const src = song.meta.x_audio;
+    if (first && src) {
+      const url = new URL(src, new URL(songPath, location.href)).href;
+      // load as a blob so seeking works even on servers without HTTP range support
+      setAudio(await (await fetch(url)).blob());
+      for (const [name, file] of [["inst", song.meta.x_instrumental], ["rhythm", song.meta.x_rhythm]]) {
+        try {
+          setExtra(name, file ? await (await fetch(new URL(file, new URL(songPath, location.href)))).blob() : null);
+        } catch (e) { setExtra(name, null); }
+      }
+    } else if (first) { $("warn").hidden = false; $("warn").textContent = "No {x_audio: …} directive in the song file."; }
+  } catch (e) {
+    $("title").textContent = "Could not load " + songPath; $("warn").hidden = false;
+    $("warn").textContent = String(e) + " — start the server from the guitarbook folder (see tools/player/serve.sh).";
+  }
+}
+
+let seeking = false;
+$("seek").addEventListener("input", () => { seeking = true; if (audio.duration) audio.currentTime = $("seek").value / 1000 * audio.duration; });
+$("seek").addEventListener("change", () => { seeking = false; });
+$("play").onclick = () => { if (audio.paused) { ensureGraph(); ctx.resume(); audio.play(); } else audio.pause(); };
+audio.addEventListener("play", () => { $("play").textContent = "❚❚ Pause"; });
+audio.addEventListener("pause", () => { $("play").textContent = "▶ Play"; });
+$("speed").onchange = () => { audio.playbackRate = +$("speed").value; audio.preservesPitch = true; updateOffset(); };
+$("loopBtn").onclick = () => { if (loopB !== null) { loopOn = !loopOn; paintLoop(); } };
+$("clickBtn").onclick = () => { clickOn = !clickOn; $("clickBtn").classList.toggle("on", clickOn); };
+$("vocalBtn").onclick = toggleVocals;
+$("rhythmBtn").onclick = toggleRhythm;
+$("followBtn").onclick = () => { follow = !follow; $("followBtn").classList.toggle("on", follow); };
+$("pitchBtn").onclick = () => { sounding = !sounding; $("pitchBtn").classList.toggle("on", sounding); render(); };
+$("reloadBtn").onclick = () => load(false);
+document.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, select") || e.metaKey || e.ctrlKey) return;
+  const k = e.key;
+  if (k === " ") { e.preventDefault(); if (tapMode) tap(); else $("play").click(); }
+  else if (k === "Escape" && tapMode) stopTapSync();
+  else if (k === "s" || k === "S") $("syncBtn").click();
+  else if (k === "+" || k === "=") $("offPlus").click();
+  else if (k === "-") $("offMinus").click();
+  else if (k === "ArrowRight" && sync) { e.preventDefault(); seekBar(Math.min(sync.bars.length - 1, curBar + 1), false); }
+  else if (k === "ArrowLeft" && sync) { e.preventDefault(); seekBar(Math.max(0, curBar - 1), false); }
+  else if (k === "l" || k === "L") $("loopBtn").click();
+  else if (k === "c" || k === "C") $("clickBtn").click();
+  else if (k === "v" || k === "V") toggleVocals();
+  else if (k === "b" || k === "B") toggleRhythm();
+  else if (k === "f" || k === "F") $("followBtn").click();
+  else if (k === "p" || k === "P") $("pitchBtn").click();
+  else if (k === "r" || k === "R") load(false);
+  else if (k === "[" || k === "]") {
+    const s = $("speed"); s.selectedIndex = Math.max(0, Math.min(s.options.length - 1, s.selectedIndex + (k === "]" ? 1 : -1)));
+    s.onchange();
+  }
+});
+/* ---------------- sync offset ---------------- */
+// Position in the song data = audio.currentTime + syncOffset, where
+//   syncOffset = skew - deviceLatency * playbackRate + trim
+//   skew          measured: what the player is really outputting vs. what audio.currentTime says
+//   deviceLatency reported by the browser: time from output until the sound reaches the speakers
+//   trim          the user's own adjustment (nudge buttons / tap)
+let syncOffset = 0, skew = 0, trim = 0, measuredOk = false, measuring = false;
+let ctx = null, elSrc = null;
+const WAVE_RATE = 2000;                        // waveform used for matching, samples per second
+const SYNC_KEY = "guitarbook.tapsync:" + songParam;
+
+function ensureGraph() {
+  if (ctx) return ctx;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  elSrc = ctx.createMediaElementSource(audio);   // from now on the player's sound goes through ctx
+  elSrc.connect(ctx.destination);
+  return ctx;
+}
+function deviceLatency() { return ctx ? (ctx.baseLatency || 0) + (ctx.outputLatency || 0) : 0; }
+function updateOffset() {
+  syncOffset = skew - deviceLatency() * (audio.playbackRate || 1) + trim;
+  const ms = (x) => Math.round(x * 1000);
+  const delay = -ms(trim);
+  $("offVal").textContent = (delay > 0 ? "+" : "") + delay + " ms";
+  $("offVal").classList.toggle("nonzero", delay !== 0);
+  $("offReset").disabled = delay === 0;
+  $("offVal").title = delay > 0 ? `Beats start ${delay} ms after the audio` : delay < 0 ? `Beats start ${-delay} ms before the audio` : "Beats and audio start together";
+  const st = $("syncStatus");
+  st.textContent = measuring ? "checking sync…" : (measuredOk || trim) ? "✓ In sync" : "";
+  st.title = `Measured: player ${ms(skew)} ms, speakers ${ms(deviceLatency())} ms, your taps ${ms(trim)} ms`;
+  st.classList.toggle("ok", !measuring && (measuredOk || !!trim));
+  curBeat = -1; if (song) tick(true);
+}
+function loadSync() {
+  let v = null;
+  try { v = localStorage.getItem(SYNC_KEY); } catch (e) { /* storage blocked */ }
+  trim = v !== null && isFinite(+v) ? +v : 0;
+  updateOffset();
+}
+function setTrim(v) {
+  trim = Math.round(Math.max(-5, Math.min(5, v)) * 1000) / 1000;
+  try { localStorage.setItem(SYNC_KEY, trim); } catch (e) { /* storage blocked */ }
+  updateOffset();
+}
+function beatLen() { return sync && sync.beats.length > 1 ? (sync.beats[sync.beats.length - 1] - sync.beats[0]) / (sync.beats.length - 1) : 0.5; }
+
+/* --- measuring what the player really outputs --- */
+// low-rate waveform (box filter + decimate) of a mono mix
+function toWave(chs, sr) {
+  const a = chs[0], b = chs[1] || chs[0];
+  const step = sr / WAVE_RATE, n = Math.floor(a.length / step), w = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0; const j0 = Math.floor(i * step), j1 = Math.floor((i + 1) * step);
+    for (let j = j0; j < j1; j++) s += a[j] + b[j];
+    w[i] = s / (j1 - j0);
+  }
+  return w;
+}
+async function getRefWave() {                     // waveform of the file that is playing now
+  const src = curSrc;
+  if (!src || src.wave) return src && src.wave;
+  const buf = await ctx.decodeAudioData(await src.blob.arrayBuffer());
+  const chs = []; for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chs.push(buf.getChannelData(c));
+  src.wave = toWave(chs, buf.sampleRate);
+  return src.wave;
+}
+// Record `secs` seconds of what `node` outputs, stamping each block with clock().
+// Returns {skew, score}: skew = true position of the recorded sound − clock().
+function measureNode(node, clock, secs = 3) {
+  return new Promise((resolve) => {
+    const sr = ctx.sampleRate, proc = ctx.createScriptProcessor(4096, 2, 1);
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    node.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+    const parts = [[], []], stamps = []; let total = 0, done = false;
+    const finish = async (bad) => {
+      if (done) return; done = true;
+      proc.onaudioprocess = null;
+      try { node.disconnect(proc); } catch (e) { /* already gone */ }
+      proc.disconnect(); mute.disconnect();
+      if (bad) return resolve(null);
+      // predicted position (by the clock) of the first recorded sample; median over blocks
+      const c0s = stamps.map(([endIdx, c]) => c - endIdx / sr);
+      const c0 = median(c0s);
+      const spread = Math.max(...c0s) - Math.min(...c0s);
+      if (spread > 0.25) return resolve(null);                 // a seek/stall happened while recording
+      const join = (arr) => { const o = new Float32Array(total); let p = 0; for (const x of arr) { o.set(x, p); p += x.length; } return o; };
+      const cap = toWave([join(parts[0]), join(parts[1])], sr);
+      const ref = await getRefWave();
+      resolve(matchWave(cap, ref, c0));
+    };
+    proc.onaudioprocess = (e) => {
+      if (done) return;
+      const ib = e.inputBuffer;
+      parts[0].push(new Float32Array(ib.getChannelData(0)));
+      parts[1].push(new Float32Array(ib.getChannelData(ib.numberOfChannels > 1 ? 1 : 0)));
+      total += ib.length;
+      stamps.push([total, clock()]);
+      if (total >= secs * sr) finish(false);
+    };
+    setTimeout(() => finish(true), (secs + 3) * 1000);         // nothing came through
+  });
+}
+// normalised cross-correlation of the captured waveform against the reference, ±1.5 s around c0
+function matchWave(cap, ref, c0) {
+  const n = cap.length, R = WAVE_RATE, maxLag = Math.round(1.5 * R);
+  let cm = 0; for (let i = 0; i < n; i++) cm += cap[i]; cm /= n;
+  const x = cap.map((v) => v - cm);
+  let ex = 0; for (let i = 0; i < n; i++) ex += x[i] * x[i];
+  if (ex < 1e-6) return null;                                    // silence: nothing to match
+  const base = Math.round(c0 * R);
+  // prefix sums of ref and ref² over the search window: each lag then only needs Σx·y
+  const w0 = Math.max(0, base - maxLag), w1 = Math.min(ref.length, base + maxLag + n);
+  const P = new Float64Array(w1 - w0 + 1), Q = new Float64Array(w1 - w0 + 1);
+  for (let i = w0; i < w1; i++) { P[i - w0 + 1] = P[i - w0] + ref[i]; Q[i - w0 + 1] = Q[i - w0] + ref[i] * ref[i]; }
+  let best = -2, bestLag = 0;
+  for (let L = -maxLag; L <= maxLag; L++) {
+    const s0 = base + L; if (s0 < w0 || s0 + n > w1) continue;
+    const sy = P[s0 + n - w0] - P[s0 - w0], syy = Q[s0 + n - w0] - Q[s0 - w0];
+    let sxy = 0;
+    for (let i = 0; i < n; i++) sxy += x[i] * ref[s0 + i];
+    const vy = syy - sy * sy / n; if (vy <= 1e-9) continue;
+    const r = sxy / Math.sqrt(ex * vy);
+    if (r > best) { best = r; bestLag = L; }
+  }
+  return { skew: bestLag / R, score: best };
+}
+
+let measureSeq = 0;
+async function autoMeasure() {
+  if (!ctx || !curSrc || audio.paused) return;
+  if (Math.abs(audio.playbackRate - 1) > 1e-3) return;          // measured at 100% speed, reused at other speeds
+  const my = ++measureSeq; measuring = true; updateOffset();
+  let res = null;
+  try { res = await measureNode(elSrc, () => audio.currentTime); } catch (e) { res = null; }
+  if (my !== measureSeq) return;                                 // superseded by a newer measurement
+  measuring = false;
+  if (res && res.score > 0.6) {
+    skew = res.skew; measuredOk = true;
+  }
+  updateOffset();
+}
+let measureTimer = null;
+function scheduleMeasure() {
+  clearTimeout(measureTimer);
+  measureTimer = setTimeout(autoMeasure, 400);
+}
+audio.addEventListener("playing", scheduleMeasure);
+audio.addEventListener("seeked", () => { if (!audio.paused) scheduleMeasure(); });
+audio.addEventListener("ratechange", updateOffset);
+
+// Tap to sync: tap the space bar on every beat; after 8 steady taps the highlighting is
+// shifted so the beats line up with what you hear.
+const TAPS_NEEDED = 8;
+let tapMode = false, taps = [], tapTimer = null;
+function startTapSync() {
+  if (!sync) return;
+  if (audio.paused) $("play").click();
+  tapMode = true; taps = [];
+  $("syncBtn").classList.add("on"); $("syncBtn").textContent = "Tapping… (Esc)";
+  drawTap("Tap the <b>space bar</b> on every beat, like tapping your foot.");
+  armTapTimeout();
+}
+function stopTapSync(msg) {
+  tapMode = false; taps = []; clearTimeout(tapTimer);
+  $("syncBtn").classList.remove("on"); $("syncBtn").textContent = "Tap to sync";
+  if (msg) { drawTap(msg, true); tapTimer = setTimeout(() => { $("tapInfo").hidden = true; }, 3500); }
+  else $("tapInfo").hidden = true;
+}
+function armTapTimeout() {
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => stopTapSync("No taps – sync unchanged."), 6000);
+}
+function drawTap(html, done) {
+  const b = $("tapInfo"); b.hidden = false; b.innerHTML = "";
+  const t = el("span"); t.innerHTML = html; b.append(t);
+  if (!done) {
+    const d = el("span", "dots");
+    for (let i = 0; i < TAPS_NEEDED; i++) d.append(el("i", i < taps.length ? "on" : ""));
+    b.append(d, el("span", "sub", "Esc to cancel"));
+  }
+}
+function tap() {
+  if (!tapMode || audio.paused) return;
+  armTapTimeout();
+  const at = audio.currentTime + syncOffset - trim;            // where the song is, without earlier taps
+  const i = beatAt(at), bs = sync.beats;
+  let best = bs[Math.max(0, i)];
+  if (i + 1 < bs.length && Math.abs(bs[i + 1] - at) < Math.abs(best - at)) best = bs[i + 1];
+  taps.push(best - at);
+  if (taps.length < TAPS_NEEDED) { drawTap("Keep tapping on every beat…"); return; }
+  // line the taps up around the first one (a tap can't be more than half a beat off)
+  const bl = beatLen(), last = taps.slice(-TAPS_NEEDED), ref = last[0];
+  const adj = last.map((d) => d - Math.round((d - ref) / bl) * bl);
+  let med = median(adj);
+  const dev = median(adj.map((d) => Math.abs(d - med)));
+  // taps only tell us the distance to *a* beat: take the smallest correction, so we never
+  // shift by a whole beat (big delays are already measured automatically)
+  med -= Math.round(med / bl) * bl;
+  if (dev > 0.06) {
+    if (taps.length >= TAPS_NEEDED * 3) return stopTapSync("The taps were too uneven to use – sync unchanged. Try again.");
+    drawTap("Nearly there – keep tapping steadily on every beat…"); return;
+  }
+  setTrim(med);
+  stopTapSync("✓ In sync");
+}
+$("syncBtn").onclick = () => (tapMode ? stopTapSync() : startTapSync());
+// manual beat offset: + = beats start 10 ms later than the audio
+$("offPlus").onclick = () => setTrim(trim - 0.01);
+$("offMinus").onclick = () => setTrim(trim + 0.01);
+$("offReset").onclick = () => setTrim(0);
+
+loadSync();
+load(true); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

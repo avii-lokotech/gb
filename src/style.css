@@ -1,0 +1,27 @@
+/* Tokens, base type and controls, shared by every page. */
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #dddbd5;
+  --accent: #c2410c; --accent-soft: #fde7da; --beat: #fb923c; --loop: #dbeafe; --loop-line: #3b82f6;
+  --chord: #9a3412; --warn-bg: #fef3c7; --warn-ink: #78350f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141414; --panel: #1e1e1f; --ink: #ececec; --muted: #9a9aa0; --line: #333336;
+    --accent: #fb923c; --accent-soft: #3a2416; --beat: #f97316; --loop: #172554; --loop-line: #60a5fa;
+    --chord: #fdba74; --warn-bg: #422006; --warn-ink: #fde68a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141414; --panel: #1e1e1f; --ink: #ececec; --muted: #9a9aa0; --line: #333336;
+  --accent: #fb923c; --accent-soft: #3a2416; --beat: #f97316; --loop: #172554; --loop-line: #60a5fa;
+  --chord: #fdba74; --warn-bg: #422006; --warn-ink: #fde68a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+h1 { font-size: 17px; margin: 0; }
+button, select { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button.on { background: var(--accent-soft); border-color: var(--accent); }
+button:disabled { cursor: default; }
+.warn { background: var(--warn-bg); color: var(--warn-ink); padding: 8px 16px; font-size: 13px; }
