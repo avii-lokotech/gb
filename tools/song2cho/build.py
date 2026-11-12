@@ -196,6 +196,16 @@ def main():
     def gap(a_, b_):
         return b_[0]["s"] - a_[-1]["e"]
 
+    # A lyric line is one line on the sheet: two phrases are only put together while the result is short enough
+    # to read as one. In a slow song a couple of bars hold far more words than that, and each phrase is a line
+    # of its own. A fragment of a few words (Whisper cutting a phrase in two) may still be put back, up to a
+    # longer line, rather than stand alone.
+    MAX_LINE_CHARS, MAX_MENDED_CHARS, FRAGMENT_WORDS = 60, 80, 4
+
+    def fits(a_, b_):
+        chars = sum(len(w["w"]) + 1 for w in a_ + b_) - 1
+        return chars <= (MAX_MENDED_CHARS if min(len(a_), len(b_)) <= FRAGMENT_WORDS else MAX_LINE_CHARS)
+
     # 1) glue short fragments (<=3 words) to the closer neighbour (prefer previous)
     changed = True
     while changed:
@@ -205,14 +215,14 @@ def main():
                 continue
             gp = gap(lines[i - 1], ln) if i > 0 else 99
             gn = gap(ln, lines[i + 1]) if i + 1 < len(lines) else 99
-            if i > 0 and gp <= gn + 0.05 and gp < 0.8 * bar_dur and span(lines[i - 1], ln) <= 4.2 * bar_dur:
+            if i > 0 and gp <= gn + 0.05 and gp < 0.8 * bar_dur and span(lines[i - 1], ln) <= 4.2 * bar_dur and fits(lines[i - 1], ln):
                 lines[i - 1] = lines[i - 1] + ln; del lines[i]; changed = True; break
-            if i + 1 < len(lines) and gn < 0.8 * bar_dur and span(ln, lines[i + 1]) <= 4.2 * bar_dur:
+            if i + 1 < len(lines) and gn < 0.8 * bar_dur and span(ln, lines[i + 1]) <= 4.2 * bar_dur and fits(ln, lines[i + 1]):
                 lines[i] = ln + lines[i + 1]; del lines[i + 1]; changed = True; break
-    # 2) join consecutive short phrases that together fit in ~2.5 bars
+    # 2) join consecutive short phrases that together fit in ~2.5 bars and in one line
     merged = []
     for ln in lines:
-        if merged and gap(merged[-1], ln) < 0.4 * bar_dur and span(merged[-1], ln) <= 2.6 * bar_dur:
+        if merged and gap(merged[-1], ln) < 0.4 * bar_dur and span(merged[-1], ln) <= 2.6 * bar_dur and fits(merged[-1], ln):
             merged[-1] = merged[-1] + ln
         else:
             merged.append(ln)
