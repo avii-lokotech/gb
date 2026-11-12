@@ -189,6 +189,14 @@ export function layoutSong(song, sync) {
         if (beatAt(sync, t) === sync.bars[b][1] - 1 && b + 1 < k1) b++;   // first word on a bar's last beat: a pickup
         return b;
       });
+      // A pickup bar (a short first bar, e.g. two beats before the first full bar) is a row of its own, so the
+      // full bars below it line up — unless it is really sung: at least two words of the first line start in it.
+      // One word does not count: the first word's time is often just the start of the recording.
+      if (starts[0] === k0 && k0 + 1 < k1 && bars[k0].n < bars[k0 + 1].n) {
+        const end = barStart(sync, k0 + 1);
+        const sung = (sync.lines[lines[0].g][2] || []).filter((w) => w[0] < end - 1e-4).length;
+        if (sung < 2) starts[0] = k0 + 1;
+      }
       for (let i = 1; i < starts.length; i++) starts[i] = Math.min(k1 - 1, Math.max(starts[i], starts[i - 1] + 1));
       if (starts[0] > k0) plain(k0, starts[0], rows);
       lines.forEach(({ chunks, g }, i) => {
