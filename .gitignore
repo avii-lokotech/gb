@@ -16,3 +16,7 @@ dist/
 tools/song2cho/.venv/
 tools/song2cho/work/
 __pycache__/
+
+# Songs are uploaded on the site (R2 + D1), not kept in the repo
+/songs/
+/*.mp3

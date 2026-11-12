@@ -11,7 +11,7 @@ usage() {
 Usage: $(basename "$0") [-h]
 
 Writes the local D1 only (container $NAME, bin/start_local_dev.sh): the user $EMAIL with the password
-"$PASSWORD", replacing the row if it exists (its song settings go with it). For local tests only; the password
+"$PASSWORD" (set again, and unlocked, if the user exists; its songs stay). For local tests only; the password
 is public, so never create this user in the live D1.
 USAGE
 }
@@ -29,6 +29,6 @@ HASH=$(docker exec -e PASSWORD="$PASSWORD" "$NAME" node -e '
     console.log(`pbkdf2$100000$${salt.toString("base64")}$${hash.toString("base64")}`);')
 
 docker exec "$NAME" wrangler d1 execute gb-db --local --command \
-    "PRAGMA foreign_keys = ON;
-     DELETE FROM user WHERE email = '$EMAIL';
-     INSERT INTO user (email, name, password_hash) VALUES ('$EMAIL', 'Test Player', '$HASH') RETURNING id, email, name"
+    "INSERT INTO user (email, name, password_hash) VALUES ('$EMAIL', 'Test Player', '$HASH')
+     ON CONFLICT (email) DO UPDATE SET password_hash = excluded.password_hash, failed_logins = 0, locked_until = NULL
+     RETURNING id, email, name"

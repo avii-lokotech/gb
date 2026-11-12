@@ -1,4 +1,4 @@
-# Local site: the Worker in wrangler dev on http://127.0.0.1:8791, serving dist/ and /api/* against a local D1.
+# Local site: the Worker in wrangler dev on http://127.0.0.1:8791, serving dist/ and /api/* against a local D1 and R2.
 # Use bin/start_local_dev.sh / bin/stop_local_dev.sh; the dry run is bin/dry_run.sh.
 # wrangler dev runs the build command of wrangler.jsonc (build.mjs + typecheck) at start and on every change.
 # wrangler dev would present requests as https://www.gb-songs.com/... (the route), so --local-upstream localhost
@@ -13,19 +13,19 @@ services:
     init: true # forwards signals to wrangler
     volumes:
       - .:/app:ro # the checkout, read-only
-      - wrangler:/app/.wrangler # what wrangler dev writes, the local D1 included
+      - wrangler:/app/.wrangler # what wrangler dev writes, the local D1 and R2 included
       - dist:/app/dist # the built site (build.mjs)
     ports:
       - "127.0.0.1:8791:8791"
     # The migrations first (the local D1 is new after bin/stop_local_dev.sh), then wrangler dev.
-    # JWT_SECRET is a local-only value; production has its own secret.
+    # JWT_SECRET and CONVERTER_TOKEN are local-only values; production has its own secrets.
     command:
       - bash
       - -ec
       - |
         wrangler d1 migrations apply gb-db --local
         exec wrangler dev --local --ip 0.0.0.0 --port 8791 --local-upstream localhost \
-            --var JWT_SECRET:local-dev-only-not-a-secret
+            --var JWT_SECRET:local-dev-only-not-a-secret --var CONVERTER_TOKEN:local-dev-only-converter-token
   # bin/dry_run.sh: what a push to main would deploy, without deploying. Runs on a copy of the checkout (so
   # nothing is written into it): npm ci as Workers Builds does, then wrangler deploy --dry-run (which runs the
   # build command). Same image as site.

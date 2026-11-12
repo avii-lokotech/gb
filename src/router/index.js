@@ -8,12 +8,12 @@ const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
   { path: '/', name: 'songs', component: SongsView, meta: { requiresAuth: true } },
   {
-    // ?song=songs/<Name>.cho
+    // ?id=<song id>
     path: '/player',
     name: 'player',
     component: PlayerView,
-    props: (route) => ({ song: String(route.query.song || '') }),
-    beforeEnter: (to) => (to.query.song ? true : { name: 'songs' }),
+    props: (route) => ({ id: Number(route.query.id) }),
+    beforeEnter: (to) => (Number(to.query.id) > 0 ? true : { name: 'songs' }),
     meta: { requiresAuth: true }
   },
   { path: '/:pathMatch(.*)*', redirect: { name: 'songs' } }

@@ -1,4 +1,4 @@
-// A song: the ChordPro subset song2cho writes, its timing file (.sync.json: beats, bars, lines) and the layout
+// A song: the ChordPro subset song2cho writes, its timing ({ beats, bars, lines }) and the layout
 // of the sheet. No DOM and no state: PlayerView and SongSheet do the drawing and the playing.
 
 /* ---------------- ChordPro parsing (subset used by song2cho) ---------------- */
@@ -111,7 +111,7 @@ export function beatLen(sync) {
 //   cols            beats of the longest row: every beat is one column of the sheet
 //   cellCounts[k]   cells of bar k
 //   beatChord[i]    the chord sounding on beat i, as written (drives Now/Next)
-//   barsMatch, linesMatch   whether the .cho has the bars / lyric lines the timing file has
+//   barsMatch, linesMatch   whether the text has the bars / lyric lines the timing has
 //   warns           what does not line up, for the user
 export function layoutSong(song, sync) {
   const warns = [];
@@ -156,11 +156,11 @@ export function layoutSong(song, sync) {
   for (const b of song.blocks) if (b.type === 'lyrics') gLines.set(b, b.lines.map((chunks) => ({ chunks, g: gl++ })));
   const linesMatch = !!sync && gl === sync.lines.length;
   const timed = barsMatch && linesMatch;
-  if (sync && !barsMatch) warns.push(`The .cho grids have ${bars.length} bars but the recording has ${sync.bars.length}. ` +
+  if (sync && !barsMatch) warns.push(`The song's grids have ${bars.length} bars but the recording has ${sync.bars.length}. ` +
     `Add or remove bars so the counts match — until then bars and lyrics can't be lined up.`);
-  else if (sync && !linesMatch) warns.push(`The .cho has ${gl} lyric lines but the timing file has ${sync.lines.length}; ` +
+  else if (sync && !linesMatch) warns.push(`The song has ${gl} lyric lines but its timing has ${sync.lines.length}; ` +
     `bars and lyric lines can't be lined up until they match again.`);
-  if (!sync) warns.push('No .sync.json timing file found next to the song — playback works but nothing will be highlighted.');
+  if (!sync) warns.push('This song has no timing — playback works but nothing will be highlighted.');
 
   // pair each grid with the lyrics section that follows it
   const items = [];

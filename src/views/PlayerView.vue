@@ -1,21 +1,20 @@
 <script setup>
 // The player: plays a song's recording and follows it on the sheet (bars, beats, lyric lines, now/next chord),
 // with a loop, a click, tempo, vocals off / drums & bass tracks and the beat offset (measured, tapped or nudged).
-// The song is songs/<Name>.cho, with <Name>.sync.json next to it and the audio its {x_audio: …},
-// {x_instrumental: …} and {x_rhythm: …} name. Speed and loop are the user's setting of the song (D1); the beat
-// offset belongs to this device and stays in its localStorage.
+// The song comes from the API: its ChordPro text, its timing and up to three tracks (the recording, vocals
+// removed, drums and bass). Speed and loop are saved with the song; the beat offset belongs to this device and
+// stays in its localStorage.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import SongSheet from '../components/SongSheet.vue';
-import { api, fetchFile } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
 import { measureNode, waveOf } from '../lib/measure.js';
 import { barOfBeat, barStart, beatAt, beatLen, cellIdx, layoutSong, median, mmss, parseCho, transposeChord } from '../lib/song.js';
 
-const props = defineProps({ song: { type: String, required: true } }); // "songs/<Name>.cho"
+const props = defineProps({ id: { type: Number, required: true } }); // the song's id
 
 const SPEEDS = [0.5, 0.6, 0.7, 0.75, 0.85, 0.9, 1];
 const TAPS_NEEDED = 8;
-const SYNC_KEY = 'guitarbook.tapsync:' + props.song;
-const songUrl = new URL(props.song, location.origin).href;
+const SYNC_KEY = 'guitarbook.tapsync:song:' + props.id;
 
 const audio = ref(null);                  // the <audio> element
 let song = null, sync = null;             // the parsed .cho and its timing file
@@ -134,9 +133,6 @@ let frame = 0;
 function loop() { tick(false); frame = requestAnimationFrame(loop); }
 
 /* ---------------- loading ---------------- */
-async function fetchText(url) {
-  return (await fetchFile(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now())).text();
-}
 // Versions of the song: the full mix and, optionally, the band only (vocals removed) and
 // the drums + bass only. Switching jumps to the other file at the same position.
 const sources = { mix: null, inst: null, rhythm: null };   // each {blob, url, wave}
@@ -181,45 +177,43 @@ function toggleRhythm() {
 }
 
 let gone = false;   // the player was left while something was still loading
-async function load(first) {
+async function load() {
   try {
-    song = parseCho(await fetchText(songUrl));
-    try { sync = JSON.parse(await fetchText(songUrl.replace(/\.cho$/, '') + '.sync.json')); } catch (e) { sync = null; }
+    const data = await api.getSong(props.id);
     if (gone) return;
+    if (data.status !== 'ready' || !data.cho) {
+      title.value = data.title;
+      warn.value = data.status === 'failed' ? `The conversion failed: ${data.error}` : 'This song is not converted yet.';
+      return;
+    }
+    song = parseCho(data.cho); sync = data.sync;
     applySong();
-    if (!first) return;
-    await restoreSetting();
-    const src = song.meta.x_audio;
-    if (!src) { warn.value = 'No {x_audio: …} directive in the song file.'; return; }
-    // loaded as a blob: the files need the session token, which an <audio> element cannot send
-    const blob = await (await fetchFile(new URL(src, songUrl))).blob();
+    restoreSetting(data);
+    // loaded as blobs: the audio needs the session token, which an <audio> element cannot send
+    const blob = await api.songAudio(props.id, 'mix');
     if (gone) return;
     setAudio(blob);
-    for (const [name, file] of [['inst', song.meta.x_instrumental], ['rhythm', song.meta.x_rhythm]]) {
+    for (const [name, track] of [['inst', 'instrumental'], ['rhythm', 'rhythm']]) {
       let extra = null;
-      try { extra = file ? await (await fetchFile(new URL(file, songUrl))).blob() : null; } catch (e) { extra = null; }
+      try { extra = data.tracks[track] ? await api.songAudio(props.id, track) : null; } catch (e) { extra = null; }
       if (gone) return;
       setExtra(name, extra);
     }
   } catch (e) {
     if (gone) return;
-    if (!layout.value) title.value = 'Could not load ' + props.song;
-    warn.value = e.message || String(e);
+    if (!layout.value) title.value = 'Could not load the song';
+    warn.value = errorMessage(e);
   }
 }
 
 /* ---------------- the user's setting of the song ---------------- */
 let settingReady = false, pending = null, saveTimer = null, playedSaved = false, savedLoop = 'null';
-async function restoreSetting() {
-  try {
-    const s = await api.getSongSetting(props.song);
-    if (gone) return;
-    if (SPEEDS.includes(s.speed)) speed.value = s.speed;
-    if (s.loop && sync && layout.value.barsMatch && s.loop[1] < sync.bars.length) {
-      [loopA.value, loopB.value] = s.loop; loopOn.value = true;
-      savedLoop = JSON.stringify(s.loop);
-    }
-  } catch (e) { /* the player works without it */ }
+function restoreSetting(s) {
+  if (SPEEDS.includes(s.speed)) speed.value = s.speed;
+  if (s.loop && sync && layout.value.barsMatch && s.loop[1] < sync.bars.length) {
+    [loopA.value, loopB.value] = s.loop; loopOn.value = true;
+    savedLoop = JSON.stringify(s.loop);
+  }
   settingReady = true;
 }
 function saveSetting(patch) {
@@ -232,7 +226,7 @@ function flushSetting() {
   clearTimeout(saveTimer);
   if (!pending) return;
   const patch = pending; pending = null;
-  api.saveSongSetting(props.song, patch).catch(() => { /* kept for this visit only */ });
+  api.saveSongSetting(props.id, patch).catch(() => { /* kept for this visit only */ });
 }
 watch(loopRange, (range) => {
   const key = JSON.stringify(range);
@@ -276,7 +270,6 @@ function onKey(e) {
   else if (k === 'b' || k === 'B') toggleRhythm();
   else if (k === 'f' || k === 'F') follow.value = !follow.value;
   else if ((k === 'p' || k === 'P') && capo.value) sounding.value = !sounding.value;
-  else if (k === 'r' || k === 'R') load(false);
   else if (k === '[' || k === ']') {
     const i = Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(speed.value) + (k === ']' ? 1 : -1)));
     setSpeed(SPEEDS[i]);
@@ -409,7 +402,7 @@ function tap() {
 onMounted(() => {
   document.addEventListener('keydown', onKey);
   loadSync();
-  load(true);
+  load();
   frame = requestAnimationFrame(loop);
 });
 onBeforeUnmount(() => {
@@ -454,16 +447,15 @@ onBeforeUnmount(() => {
       <button title="L" :class="{ on: loopOn }" @click="toggleLoop">{{ loopText }}</button>
       <button title="C" :class="{ on: clickOn }" @click="clickOn = !clickOn">Click</button>
       <button :disabled="!hasInst" :class="{ on: !vocalsOn && !rhythmOnly }" @click="toggleVocals"
-        :title="hasInst ? 'V: mute or unmute the vocals' : 'No band-only track for this song (run song2cho.sh again to make one)'">
+        :title="hasInst ? 'V: mute or unmute the vocals' : 'No band-only track for this song'">
         {{ vocalsOn ? 'Vocals on' : 'Vocals off' }}
       </button>
       <button :disabled="!hasRhythm" :class="{ on: rhythmOnly }" @click="toggleRhythm"
-        :title="hasRhythm ? 'B: play only the drums and bass' : 'No drums & bass track for this song (run song2cho.sh again to make one)'">
+        :title="hasRhythm ? 'B: play only the drums and bass' : 'No drums & bass track for this song'">
         Drums &amp; bass
       </button>
       <button title="F" :class="{ on: follow }" @click="follow = !follow">Follow</button>
       <button title="P" :class="{ on: sounding }" :disabled="!capo" @click="sounding = !sounding">{{ pitchText }}</button>
-      <button title="R" @click="load(false)">Reload .cho</button>
       <button class="syncBtn" :class="{ on: tapMode }" title="S: tap the space bar on every beat to sync" @click="toggleTapSync">
         {{ tapMode ? 'Tapping… (Esc)' : 'Tap to sync' }}
       </button>
@@ -477,7 +469,7 @@ onBeforeUnmount(() => {
       <span class="syncStatus" :class="{ ok: syncOk }" :title="syncTitle">{{ syncStatus }}</span>
     </div>
     <div class="help">Click a bar, lyric line or time to jump · <kbd>Shift</kbd>+click a bar to loop from the last clicked bar ·
-      <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> bar · <kbd>L</kbd> loop · <kbd>C</kbd> click · <kbd>V</kbd> vocals · <kbd>B</kbd> drums &amp; bass · <kbd>R</kbd> reload after editing · <kbd>S</kbd> tap to sync · <kbd>−</kbd>/<kbd>+</kbd> beats 10 ms earlier/later</div>
+      <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> bar · <kbd>L</kbd> loop · <kbd>C</kbd> click · <kbd>V</kbd> vocals · <kbd>B</kbd> drums &amp; bass · <kbd>S</kbd> tap to sync · <kbd>−</kbd>/<kbd>+</kbd> beats 10 ms earlier/later</div>
     <div v-if="tapInfo" class="tapbanner">
       <span v-if="tapInfo.first">Tap the <b>space bar</b> on every beat, like tapping your foot.</span>
       <span v-else>{{ tapInfo.text }}</span>

@@ -3,14 +3,12 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-19",
   // wrangler deploy (Workers Builds) and wrangler dev run this first: the site into dist/, then the typecheck.
-  "build": { "command": "npm run build", "watch_dir": ["src", "worker", "songs", "index.html"] },
-  // The SPA is served from dist/ as is. The Worker runs for /api/* and for the song files (songs/ and the
-  // recordings in the root), which it hands out from ASSETS to a logged-in user only.
+  "build": { "command": "npm run build", "watch_dir": ["src", "worker", "index.html"] },
+  // The SPA is served from dist/; only /api/* runs the Worker.
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/songs/*", "/*.mp3"]
+    "run_worker_first": ["/api/*"]
   },
   // Custom Domain: the zone gb-songs.com must be active in this Cloudflare account; the deploy creates the DNS
   // record and certificate. No workers.dev URL.
@@ -25,5 +23,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  // The songs' audio: the uploaded recordings and the tracks the converter makes (worker/util.ts objectKey).
+  // The bucket must exist before the first deploy that binds it (README "Deploy").
+  "r2_buckets": [{ "binding": "SONGS", "bucket_name": "gb-songs" }],
   "observability": { "enabled": true }
 }
