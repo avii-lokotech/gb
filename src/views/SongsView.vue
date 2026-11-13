@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../stores/authStore';
+import AppButton from '../components/AppButton.vue';
 
 const router = useRouter();
 const auth = useAuth();
@@ -91,53 +92,54 @@ function logout() {
 </script>
 
 <template>
-  <header class="flex flex-wrap items-center gap-4 border-b border-line bg-panel px-4 py-2.5">
-    <h1>Guitar Book</h1>
-    <button class="border-accent bg-accent-soft font-semibold disabled:opacity-60" :disabled="!!uploading" @click="fileInput.click()">
+  <header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-panel px-3 py-2.5 sm:px-4">
+    <h1 class="text-lg font-bold">Guitar Book</h1>
+    <AppButton variant="primary" :disabled="!!uploading" @click="fileInput.click()">
       {{ uploading ? 'Uploading…' : 'Upload song' }}
-    </button>
+    </AppButton>
     <input ref="fileInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.aac" multiple hidden @change="upload">
-    <span class="ml-auto text-13 text-muted">{{ auth.state.user?.name || auth.state.user?.email }}</span>
-    <button @click="logout">Sign out</button>
+    <span class="ml-auto text-sm text-muted">{{ auth.state.user?.name || auth.state.user?.email }}</span>
+    <AppButton @click="logout">Sign out</AppButton>
   </header>
-  <p v-if="error" class="warn my-[13px]" role="alert">{{ error }}</p>
-  <main class="mx-auto max-w-[760px] p-4">
-    <p v-if="uploading" class="my-[15px] text-muted">Uploading {{ uploading }}…</p>
-    <p v-if="loading" class="my-[15px] text-muted">Loading…</p>
-    <p v-else-if="!songs.length && !error" class="my-[15px] text-muted">
+  <p v-if="error" class="bg-warn-bg px-4 py-2 text-sm text-warn-ink" role="alert">{{ error }}</p>
+  <main class="mx-auto max-w-3xl p-3 sm:p-4">
+    <p v-if="uploading" class="my-4 text-muted">Uploading {{ uploading }}…</p>
+    <p v-if="loading" class="my-4 text-muted">Loading…</p>
+    <p v-else-if="!songs.length && !error" class="my-4 text-muted">
       No songs yet. Upload a recording (mp3, m4a, wav, flac, ogg or aac, at most 40 MB): its chords, lyrics and timing
       are worked out from it, which takes a few minutes.
     </p>
-    <ul v-else class="rounded-[10px] border border-line bg-panel">
-      <li v-for="song in sorted" :key="song.id" class="flex items-center border-t border-line first:border-t-0">
-        <button class="border-0 bg-transparent py-2.5 pl-3.5 pr-1.5 text-17 leading-none" :class="song.favourite ? 'text-accent' : 'text-muted'"
+    <ul v-else class="rounded-lg border border-line bg-panel">
+      <!-- phone: star and title, then what is known about the song, then its actions; from sm: on one line -->
+      <li v-for="song in sorted" :key="song.id" class="flex flex-wrap items-center border-t border-line first:border-t-0">
+        <button class="cursor-pointer rounded-md py-2.5 pl-3.5 pr-1.5 text-lg leading-none" :class="song.favourite ? 'text-accent' : 'text-muted'"
           :aria-pressed="song.favourite" :title="song.favourite ? 'Remove from favourites' : 'Add to favourites'" @click="toggleFavourite(song)">
           {{ song.favourite ? '★' : '☆' }}
         </button>
         <component :is="song.status === 'ready' ? 'RouterLink' : 'div'"
-          class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1.5 px-1.5 py-2.5 text-inherit no-underline"
+          class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1 px-1.5 py-2.5 text-inherit no-underline"
           :class="{ group: song.status === 'ready' }"
           :to="song.status === 'ready' ? { name: 'player', query: { id: song.id } } : undefined">
           <span class="font-semibold group-hover:text-accent">{{ song.title }}</span>
-          <span v-if="song.status !== 'ready'" class="rounded-full px-2 py-px text-12"
+          <span v-if="song.status !== 'ready'" class="rounded-full px-2 py-px text-xs"
             :class="song.status === 'failed' ? 'bg-warn-bg text-warn-ink' : 'bg-accent-soft text-chord'">{{ STATUS[song.status] }}</span>
-          <span class="ml-auto text-right text-13 text-muted">{{ detail(song) }}</span>
+          <span class="basis-full text-sm text-muted sm:ml-auto sm:basis-auto sm:text-right">{{ detail(song) }}</span>
         </component>
-        <span class="flex gap-1.5 pl-1.5 pr-3.5">
-          <button v-if="song.status === 'failed'" class="px-2 py-[3px] text-12 text-muted" @click="retry(song)">Try again</button>
+        <span class="flex basis-full justify-end gap-1.5 px-3.5 pb-2.5 sm:basis-auto sm:pb-0 sm:pl-1.5">
+          <AppButton v-if="song.status === 'failed'" size="sm" variant="quiet" @click="retry(song)">Try again</AppButton>
           <template v-if="asking(song, 'delete')">
-            <button class="border-warn-ink bg-warn-bg px-2 py-[3px] text-12 text-warn-ink" @click="remove(song)">Delete for good</button>
-            <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = null">Keep</button>
+            <AppButton size="sm" variant="danger" @click="remove(song)">Delete for good</AppButton>
+            <AppButton size="sm" variant="quiet" @click="confirming = null">Keep</AppButton>
           </template>
           <template v-else-if="asking(song, 'convert')">
-            <button class="border-warn-ink bg-warn-bg px-2 py-[3px] text-12 text-warn-ink" title="The new conversion replaces the song's text, including your edits"
-              @click="retry(song)">Convert and replace my edits</button>
-            <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = null">Keep</button>
+            <AppButton size="sm" variant="danger" title="The new conversion replaces the song's text, including your edits"
+              @click="retry(song)">Convert and replace my edits</AppButton>
+            <AppButton size="sm" variant="quiet" @click="confirming = null">Keep</AppButton>
           </template>
           <template v-else>
-            <button v-if="song.status === 'ready'" class="px-2 py-[3px] text-12 text-muted" title="Run the conversion again, e.g. after the converter was improved"
-              @click="confirming = { id: song.id, what: 'convert' }">Convert again</button>
-            <button class="px-2 py-[3px] text-12 text-muted" @click="confirming = { id: song.id, what: 'delete' }">Delete</button>
+            <AppButton v-if="song.status === 'ready'" size="sm" variant="quiet" title="Run the conversion again, e.g. after the converter was improved"
+              @click="confirming = { id: song.id, what: 'convert' }">Convert again</AppButton>
+            <AppButton size="sm" variant="quiet" @click="confirming = { id: song.id, what: 'delete' }">Delete</AppButton>
           </template>
         </span>
       </li>

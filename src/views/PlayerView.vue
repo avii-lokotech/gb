@@ -6,6 +6,7 @@
 // stays in its localStorage. Edit opens the song's text next to the sheet, which follows what is typed.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
+import AppButton from '../components/AppButton.vue';
 import SongSheet from '../components/SongSheet.vue';
 import { api, errorMessage } from '../lib/api';
 import { measureNode, waveOf } from '../lib/measure.js';
@@ -467,86 +468,90 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-[5] border-b border-line bg-panel px-4 py-2.5">
-    <div class="flex flex-wrap items-center gap-4">
-      <RouterLink class="text-13 text-muted no-underline hover:text-accent" :to="{ name: 'songs' }">‹ Songs</RouterLink>
-      <div>
-        <h1>{{ title }}</h1>
-        <div class="text-13 text-muted">{{ meta }}</div>
+  <!-- the controls: at the top of the page on a phone, staying in view from md: -->
+  <header class="z-10 border-b border-line bg-panel px-3 py-2.5 sm:px-4 md:sticky md:top-0">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <RouterLink class="text-sm text-muted no-underline hover:text-accent" :to="{ name: 'songs' }">‹ Songs</RouterLink>
+      <div class="min-w-0">
+        <h1 class="text-lg font-bold">{{ title }}</h1>
+        <div class="text-sm text-muted">{{ meta }}</div>
       </div>
-      <div class="ml-auto flex items-baseline gap-[22px]">
+      <div class="ml-auto flex items-baseline gap-6">
         <div>
-          <div class="text-11 uppercase tracking-[.06em] text-muted">Now <span class="ml-1.5 inline-flex gap-1 align-middle"><i v-for="q in dotsN" :key="q"
-            class="inline-block h-[9px] w-[9px] rounded-full" :class="q - 1 === dotsPos ? 'bg-beat' : 'bg-line'"></i></span></div>
-          <span class="inline-block min-w-[2.5ch] text-30 font-bold text-chord">{{ nowChord ? show(nowChord) : '–' }}</span>
+          <div class="text-xs uppercase tracking-wider text-muted">Now <span class="ml-1.5 inline-flex gap-1 align-middle"><i v-for="q in dotsN" :key="q"
+            class="inline-block size-2 rounded-full" :class="q - 1 === dotsPos ? 'bg-beat' : 'bg-line'"></i></span></div>
+          <span class="inline-block min-w-10 text-3xl font-bold text-chord">{{ nowChord ? show(nowChord) : '–' }}</span>
         </div>
         <div>
-          <div class="text-11 uppercase tracking-[.06em] text-muted">Next</div>
-          <span class="text-20 font-semibold">{{ nextChord ? show(nextChord) : '–' }}</span> <span class="text-12 text-muted">{{ nextIn }}</span>
+          <div class="text-xs uppercase tracking-wider text-muted">Next</div>
+          <span class="text-xl font-semibold">{{ nextChord ? show(nextChord) : '–' }}</span> <span class="text-xs text-muted">{{ nextIn }}</span>
         </div>
       </div>
     </div>
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
-      <button class="min-w-[74px] font-semibold" title="Space" @click="togglePlay">{{ playing ? '❚❚ Pause' : '▶ Play' }}</button>
-      <span class="min-w-[92px] text-13 tabular-nums text-muted">{{ timeText }}</span>
-      <input class="m-[2px] min-w-[140px] flex-1 accent-accent" type="range" min="0" max="1000" :value="seekVal" aria-label="Position"
+      <AppButton class="min-w-20 font-semibold" title="Space" @click="togglePlay">{{ playing ? '❚❚ Pause' : '▶ Play' }}</AppButton>
+      <span class="min-w-24 text-sm tabular-nums text-muted">{{ timeText }}</span>
+      <!-- the position: a line of its own on a phone, between the other controls from sm: -->
+      <input class="min-w-36 flex-1 basis-full accent-accent sm:basis-0" type="range" min="0" max="1000" :value="seekVal" aria-label="Position"
         @input="onSeekInput" @change="seeking = false">
-      <select title="[ and ] to change" :value="speed" @change="setSpeed(+$event.target.value)">
+      <select class="cursor-pointer rounded-md border border-line bg-bg px-2.5 py-1 text-sm text-ink" title="[ and ] to change" :value="speed" @change="setSpeed(+$event.target.value)">
         <option v-for="s in SPEEDS" :key="s" :value="s">{{ Math.round(s * 100) }}%</option>
       </select>
-      <button title="L" :class="{ 'btn-on': loopOn }" @click="toggleLoop">{{ loopText }}</button>
-      <button title="C" :class="{ 'btn-on': clickOn }" @click="clickOn = !clickOn">Click</button>
-      <button :disabled="!hasInst" :class="{ 'btn-on': !vocalsOn && !rhythmOnly }" @click="toggleVocals"
+      <AppButton title="L" :on="loopOn" @click="toggleLoop">{{ loopText }}</AppButton>
+      <AppButton title="C" :on="clickOn" @click="clickOn = !clickOn">Click</AppButton>
+      <AppButton :disabled="!hasInst" :on="!vocalsOn && !rhythmOnly" @click="toggleVocals"
         :title="hasInst ? 'V: mute or unmute the vocals' : 'No band-only track for this song'">
         {{ vocalsOn ? 'Vocals on' : 'Vocals off' }}
-      </button>
-      <button :disabled="!hasRhythm" :class="{ 'btn-on': rhythmOnly }" @click="toggleRhythm"
+      </AppButton>
+      <AppButton :disabled="!hasRhythm" :on="rhythmOnly" @click="toggleRhythm"
         :title="hasRhythm ? 'B: play only the drums and bass' : 'No drums & bass track for this song'">
         Drums &amp; bass
-      </button>
-      <button title="F" :class="{ 'btn-on': follow }" @click="follow = !follow">Follow</button>
-      <button title="P" :class="{ 'btn-on': sounding }" :disabled="!capo" @click="sounding = !sounding">{{ pitchText }}</button>
-      <button title="Correct the chords and lyrics" :class="{ 'btn-on': editing }" :disabled="!layout" @click="editing ? cancelEdit() : startEdit()">Edit</button>
-      <button :class="{ 'border-accent bg-accent text-white': tapMode }" title="S: tap the space bar on every beat to sync" @click="toggleTapSync">
+      </AppButton>
+      <AppButton title="F" :on="follow" @click="follow = !follow">Follow</AppButton>
+      <AppButton title="P" :on="sounding" :disabled="!capo" @click="sounding = !sounding">{{ pitchText }}</AppButton>
+      <AppButton title="Correct the chords and lyrics" :on="editing" :disabled="!layout" @click="editing ? cancelEdit() : startEdit()">Edit</AppButton>
+      <AppButton :variant="tapMode ? 'solid' : 'default'" title="S: tap the space bar on every beat to sync" @click="toggleTapSync">
         {{ tapMode ? 'Tapping… (Esc)' : 'Tap to sync' }}
-      </button>
+      </AppButton>
       <span class="inline-flex items-center gap-1" title="How much later the beats start than the audio">
-        <span class="text-12 text-muted">Beats</span>
-        <button class="min-w-[30px] font-bold" title="Beats 10 ms earlier (− key)" @click="setTrim(trim + 0.01)">−</button>
-        <span class="min-w-[58px] text-center text-13 tabular-nums" :class="{ 'font-semibold text-accent': offDelay !== 0 }" :title="offTitle">{{ (offDelay > 0 ? '+' : '') + offDelay }} ms</span>
-        <button class="min-w-[30px] font-bold" title="Beats 10 ms later (+ key)" @click="setTrim(trim - 0.01)">+</button>
-        <button class="min-w-[30px] disabled:opacity-[.45]" title="Back to 0 ms: audio and beats start together" :disabled="offDelay === 0" @click="setTrim(0)">Reset</button>
+        <span class="text-xs text-muted">Beats</span>
+        <AppButton class="min-w-8 font-bold" title="Beats 10 ms earlier (− key)" @click="setTrim(trim + 0.01)">−</AppButton>
+        <span class="min-w-14 text-center text-sm tabular-nums" :class="{ 'font-semibold text-accent': offDelay !== 0 }" :title="offTitle">{{ (offDelay > 0 ? '+' : '') + offDelay }} ms</span>
+        <AppButton class="min-w-8 font-bold" title="Beats 10 ms later (+ key)" @click="setTrim(trim - 0.01)">+</AppButton>
+        <AppButton title="Back to 0 ms: audio and beats start together" :disabled="offDelay === 0" @click="setTrim(0)">Reset</AppButton>
       </span>
-      <span class="text-12" :class="syncOk ? 'text-ok' : 'text-muted'" :title="syncTitle">{{ syncStatus }}</span>
+      <span class="text-xs" :class="syncOk ? 'text-ok' : 'text-muted'" :title="syncTitle">{{ syncStatus }}</span>
     </div>
-    <div class="mt-1.5 text-12 text-muted">Click a bar, lyric line or time to jump · <kbd>Shift</kbd>+click a bar to loop from the last clicked bar ·
+    <!-- the keys: only where there is room, and likely a keyboard -->
+    <div class="mt-1.5 hidden text-xs text-muted lg:block">Click a bar, lyric line or time to jump · <kbd>Shift</kbd>+click a bar to loop from the last clicked bar ·
       <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> bar · <kbd>L</kbd> loop · <kbd>C</kbd> click · <kbd>V</kbd> vocals · <kbd>B</kbd> drums &amp; bass · <kbd>S</kbd> tap to sync · <kbd>−</kbd>/<kbd>+</kbd> beats 10 ms earlier/later</div>
-    <div v-if="tapInfo" class="mt-2 flex flex-wrap items-center gap-3.5 rounded-lg border border-accent bg-accent-soft px-3.5 py-2.5 text-15">
+    <div v-if="tapInfo" class="mt-2 flex flex-wrap items-center gap-3.5 rounded-lg border border-accent bg-accent-soft px-3.5 py-2.5">
       <span v-if="tapInfo.first">Tap the <b>space bar</b> on every beat, like tapping your foot.</span>
       <span v-else>{{ tapInfo.text }}</span>
       <template v-if="!tapInfo.done">
-        <span class="inline-flex gap-[5px]"><i v-for="i in TAPS_NEEDED" :key="i" class="inline-block h-3 w-3 rounded-full border-2 border-accent"
+        <span class="inline-flex gap-1"><i v-for="i in TAPS_NEEDED" :key="i" class="inline-block size-3 rounded-full border-2 border-accent"
           :class="{ 'bg-accent': i - 1 < tapInfo.count }"></i></span>
-        <span class="text-12 text-muted">Esc to cancel</span>
+        <span class="text-xs text-muted">Esc to cancel</span>
       </template>
     </div>
   </header>
-  <div v-if="warn" class="warn">{{ warn }}</div>
+  <div v-if="warn" class="bg-warn-bg px-4 py-2 text-sm text-warn-ink">{{ warn }}</div>
   <SongSheet v-if="layout" :layout="layout" :sounding="sounding" :cur-bar="curBar" :cur-cell="curCell" :cur-line="curLine"
     :loop="loopRange" :follow="follow" :playing="playing" @seek-bar="seekBar" @seek-line="seekLine" />
-  <!-- the editor: a drawer over the bottom of the page; the spacer keeps the end of the sheet reachable above it -->
+  <!-- the editor: a drawer over the bottom of the page; the spacer, as high as the drawer, keeps the end of the
+       sheet reachable above it -->
   <template v-if="editing">
-    <div class="h-[42vh]"></div>
-    <section class="fixed inset-x-0 bottom-0 z-[6] flex h-[40vh] flex-col border-t border-line bg-panel shadow-[0_-6px_18px_rgb(0_0_0/.18)]" aria-label="The song's text">
-      <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-2">
-        <button class="border-accent bg-accent-soft font-semibold disabled:opacity-[.45]" :disabled="saving || !dirty" @click="saveEdit">{{ saving ? 'Saving…' : 'Save' }}</button>
-        <button class="disabled:opacity-[.45]" :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</button>
-        <button class="disabled:opacity-[.45]" :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</button>
-        <span class="text-13 text-accent" role="status">{{ editNote }}</span>
-        <span class="ml-auto text-12 text-muted">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
+    <div class="h-80 md:h-96"></div>
+    <section class="fixed inset-x-0 bottom-0 z-20 flex h-80 flex-col border-t border-line bg-panel shadow-2xl md:h-96" aria-label="The song's text">
+      <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3 py-2 sm:px-4">
+        <AppButton variant="primary" :disabled="saving || !dirty" @click="saveEdit">{{ saving ? 'Saving…' : 'Save' }}</AppButton>
+        <AppButton :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</AppButton>
+        <AppButton :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</AppButton>
+        <span class="text-sm text-accent" role="status">{{ editNote }}</span>
+        <span class="hidden text-xs text-muted lg:ml-auto lg:inline">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
           In the lyrics <code>[Am]</code> puts a chord before a word. Keep the number of bars and of lyric lines.</span>
       </div>
-      <textarea class="min-h-0 w-full flex-1 resize-none overflow-auto whitespace-pre border-0 border-t border-line bg-bg px-4 py-2.5 font-mono text-13 leading-normal text-ink [tab-size:4] focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-accent"
+      <textarea class="min-h-0 w-full flex-1 resize-none overflow-auto whitespace-pre border-t border-line bg-bg px-3 py-2.5 font-mono text-sm text-ink focus:outline-2 focus:-outline-offset-2 focus:outline-accent sm:px-4"
         :value="editText" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="ChordPro text" @input="onEditInput"></textarea>
     </section>
   </template>

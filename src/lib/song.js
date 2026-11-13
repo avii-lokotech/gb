@@ -108,7 +108,7 @@ export function beatLen(sync) {
 //   capo, flats     for showing the sounding chords instead of the shapes
 //   sections        [{ comment }] or [{ label, bpm, lyrics, rows }]; bpm is the section's tempo; a row is a lyric line with the bars it is sung
 //                   over, or bars only: { time, meter, bars: [{ k, n, cells: [{ tok, dot }], carry, strum }], chunks, g }
-//   cols            beats of the longest row: every beat is one column of the sheet
+//   meter           beats of the song's usual bar, from {time: 4/4}: the sheet draws so many columns per bar
 //   cellCounts[k]   cells of bar k
 //   beatChord[i]    the chord sounding on beat i, as written (drives Now/Next)
 //   barsMatch, linesMatch   whether the text has the bars / lyric lines the timing has
@@ -249,11 +249,6 @@ export function layoutSong(song, sync) {
       rows: grid ? oneSignature(rows, k0, k1) : rows, lyrics: !!lyr });
   }
 
-  // 2. one width for every beat: the grid has as many columns as the longest row has beats
-  const rowBeats = (r) => { let n = 0; for (let k = r.k0; k < r.k1; k++) n += bars[k].n; return n; };
-  let cols = 4;
-  for (const s of sections) for (const r of s.rows || []) cols = Math.max(cols, rowBeats(r));
-
   // 3. what to draw for every row
   for (const s of sections) {
     for (const r of s.rows || []) {
@@ -269,5 +264,5 @@ export function layoutSong(song, sync) {
     }
   }
 
-  return { capo, flats, sections, cols, cellCounts: bars.map((b) => b.cells.length), beatChord, barsMatch, linesMatch, warns };
+  return { capo, flats, meter: parseInt(meta.time, 10) || 4, sections, cellCounts: bars.map((b) => b.cells.length), beatChord, barsMatch, linesMatch, warns };
 }
