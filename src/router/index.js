@@ -3,6 +3,7 @@ import { isAuthenticated } from '../lib/api';
 import LoginView from '../views/LoginView.vue';
 import SongsView from '../views/SongsView.vue';
 import PlayerView from '../views/PlayerView.vue';
+import BeatsView from '../views/BeatsView.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
@@ -12,6 +13,15 @@ const routes = [
     path: '/player',
     name: 'player',
     component: PlayerView,
+    props: (route) => ({ id: Number(route.query.id) }),
+    beforeEnter: (to) => (Number(to.query.id) > 0 ? true : { name: 'songs' }),
+    meta: { requiresAuth: true }
+  },
+  {
+    // ?id=<song id>: the song bar by bar, with only a player
+    path: '/beats',
+    name: 'beats',
+    component: BeatsView,
     props: (route) => ({ id: Number(route.query.id) }),
     beforeEnter: (to) => (Number(to.query.id) > 0 ? true : { name: 'songs' }),
     meta: { requiresAuth: true }

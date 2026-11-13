@@ -8,8 +8,9 @@ A user uploads a recording on the site. The **converter**, `tools/song2cho/conve
 song2cho, picks it up, works out its chords, lyrics and timing, and hands them back; the song then opens in the
 player. Songs are not in this repo.
 
-- `src/` — the SPA: login, the songs with the upload (`views/SongsView.vue`) and the player (`views/PlayerView.vue`
-  with `components/SongSheet.vue`; parsing and layout in `lib/song.js`). All network calls go through `src/lib/api.js`.
+- `src/` — the SPA: login, the songs with the upload (`views/SongsView.vue`), the player (`views/PlayerView.vue`
+  with `components/SongSheet.vue`; parsing and layout in `lib/song.js`) and the beats page (`views/BeatsView.vue`:
+  only a player and the song bar by bar, each beat with the words that start there as plain text). All network calls go through `src/lib/api.js`.
   Styling is Tailwind 4 (the `@tailwindcss/vite` plugin; no config file): utility classes in the templates, on
   Tailwind's own scale (rem) with the site's colours as the `@theme` of `src/style.css`. The pages are written
   mobile-first: unprefixed classes are the phone layout, and `sm:` / `md:` / `lg:` / `xl:` add to it (the sheet
@@ -20,8 +21,7 @@ player. Songs are not in this repo.
   (`worker/ops/`) for the logged-in user; `POST /api/uploadSong` and `GET /api/audio/<id>/<track>` carry the audio;
   `/api/converter/*` is the converter's side of the queue, with its own token (`worker/converter.ts`).
 - `migrations/` — the D1 schema: `user` (the logins) and `song` (per user: title, artist, the ChordPro text in use
-  and as converted, the timing, the conversion's status, and the user's favourite, speed, practice loop and last
-  played).
+  and as converted, the conversion's status, and the user's favourite, speed, practice loop and last played).
 - R2 holds the audio: `songs/<user id>/<song id>/source` (the upload), `instrumental.mp3` and `rhythm.mp3`.
 - `tools/song2cho/` — the conversion (Demucs, beat_this, chords, Whisper; Apple GPU) and the converter around it.
 - `tools/player/` — the original single-file player, for song2cho's own output in `songs/` (git-ignored) without
@@ -70,13 +70,44 @@ full output stays in `tools/song2cho/work/queue/job-<id>.log`. A song claimed an
 handed out again. Whoever has the token can read every uploaded recording and write any song's result, so it stays
 on that Mac.
 
-## Editing a song
+## The song's text and its timing
 
-The conversion is a draft: check it by ear. **Edit** in the player opens the song's ChordPro text under the sheet,
-which follows what is typed; the player keeps working, so a bar can be looped while it is corrected. Save stores
-the text (title and artist follow its `{title: …}` and `{artist: …}`); **Converted draft** brings back what the
-conversion made. The timing is not edited: the text must keep the recording's number of bars and lyric lines, and
-the sheet says so when it does not.
+A song is one ChordPro text, and the text holds the timing too, so what is played and when is said in one place.
+Three directives of our own carry it (ChordPro leaves `x_…` to extensions, and other ChordPro tools skip them),
+with every time in whole milliseconds from the start of the recording:
+
+```
+{start_of_grid label="Verse 2"}
+{x_bars: 26160 28720 31320 33900}
+| G . . . | C . . . | G . . . | C . . . |
+{end_of_grid}
+{start_of_verse label="Verse 2"}
+{x_line: 26400 31100}
+{x_words: 26400 27300 28100 28720 29400 30100}
+[G]Homeward bound I wish I [C]was
+{end_of_verse}
+{x_end: 140940}
+```
+
+- `{x_bars: …}` before a grid row: when each bar of that row starts.
+- `{x_line: start end}` before a lyric line: when it is sung.
+- `{x_words: …}` after it, optional: when each word of that line starts. The beats page uses it to show a word
+  in the bars it is sung in; a line without it, or with other words than times (after an edit), has its words
+  spread evenly over the line's length.
+- `{x_end: …}` once: when the last bar ends.
+
+A bar has as many beats as it has cells (`| . . |` is a two-beat bar), evenly spaced from its start to the next
+bar's start. The converter writes all of it; the player (`src/lib/song.js`) reads nothing else.
+
+**Edit** in the player opens the text under the sheet, which follows what is typed; the player keeps working, so a
+bar can be looped while it is corrected. Chords, words, bars and lines can all be changed, added or removed: a new
+grid row needs its `{x_bars}`, a new lyric line its `{x_line}`, and the sheet says which one is missing or out of
+order. Save stores the text (title and artist follow its `{title: …}` and `{artist: …}`); **Converted draft**
+brings back what the conversion made.
+
+Songs converted before this have their timing apart, in `song.sync`. The player writes it into the text when it
+opens such a song (`withTiming`), and it is stored that way the next time the text is saved or the song converted
+again; `song.sync` is then no longer read.
 
 ## Users
 

@@ -4,7 +4,8 @@
 //   POST /api/converter/claim                       → { job: { id, title, file_name } } (now converting), or { job: null }
 //   GET  /api/converter/source/<id>                 → the uploaded recording
 //   PUT  /api/converter/track/<id>/<instrumental|rhythm>   body: the track, an mp3
-//   POST /api/converter/done/<id>   { cho, sync }   → ready; title and artist are taken from cho, which is also kept as the draft
+//   POST /api/converter/done/<id>   { cho, sync }   → ready; title and artist are taken from cho, which is also kept as the draft.
+//                                                   cho holds the timing; sync is null (it was the timing apart, of older converters)
 //   POST /api/converter/fail/<id>   { error }       → failed, with a sentence for the user
 // A song claimed and not finished within STALE_MS is handed out again. A song deleted meanwhile answers 404.
 import { Env, Fail, MAX_AUDIO_BYTES, MAX_CHO_CHARS, audio, directive, id, invalid, isTrack, json, notFound, objectKey } from "./util";

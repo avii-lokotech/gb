@@ -69,13 +69,13 @@ watch(() => props.curBar, (k) => {
                 :class="barClass(bar.k)"
                 :style="{ gridColumn: 'span ' + bar.n, gridTemplateColumns: `repeat(${bar.cells.length}, minmax(0, 1fr))` }"
                 @click="emit('seek-bar', bar.k, $event.shiftKey)">
-                <div v-for="(cell, i) in bar.cells" :key="i" class="min-w-0 overflow-hidden whitespace-nowrap rounded-sm px-0.5 py-1 text-xs sm:px-1 sm:text-sm"
+                <div v-for="(cell, i) in bar.cells" :key="i" class="min-w-0 whitespace-nowrap rounded-sm px-0.5 py-1 text-xs sm:px-1 sm:text-sm"
                   :class="[cellClass(bar, cell, i), { 'outline-2 -outline-offset-2 outline-beat': bar.k === curBar && i === curCell }]">
                   {{ cellText(bar, cell, i) }}
                 </div>
                 <!-- strum pattern under the chords -->
                 <div v-if="bar.strum" class="col-span-full grid" :style="{ gridTemplateColumns: `repeat(${bar.strum.length}, minmax(0, 1fr))` }">
-                  <div v-for="(tok, i) in bar.strum" :key="i" class="overflow-hidden whitespace-nowrap px-1 text-xs text-muted">{{ tok.replace(/~/g, ' ') }}</div>
+                  <div v-for="(tok, i) in bar.strum" :key="i" class="whitespace-nowrap px-1 text-xs text-muted">{{ tok.replace(/~/g, ' ') }}</div>
                 </div>
               </div>
             </div>

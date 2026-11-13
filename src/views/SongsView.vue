@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../stores/authStore';
+import { nextTheme, theme } from '../lib/theme.js';
 import AppButton from '../components/AppButton.vue';
 import AppNotice from '../components/AppNotice.vue';
 
@@ -100,6 +101,7 @@ function logout() {
     </AppButton>
     <input ref="fileInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.aac" multiple hidden @change="upload">
     <span class="ml-auto text-sm text-muted">{{ auth.state.user?.name || auth.state.user?.email }}</span>
+    <AppButton title="Colour theme: follow the device, light or dark" @click="nextTheme">Theme: {{ theme }}</AppButton>
     <AppButton @click="logout">Sign out</AppButton>
   </header>
   <AppNotice v-if="error" role="alert">{{ error }}</AppNotice>
@@ -138,6 +140,8 @@ function logout() {
             <AppButton size="sm" variant="quiet" @click="confirming = null">Keep</AppButton>
           </template>
           <template v-else>
+            <AppButton v-if="song.status === 'ready'" size="sm" variant="quiet" title="The song bar by bar: its beats and the words next to them"
+              @click="router.push({ name: 'beats', query: { id: song.id } })">Beats</AppButton>
             <AppButton v-if="song.status === 'ready'" size="sm" variant="quiet" title="Run the conversion again, e.g. after the converter was improved"
               @click="confirming = { id: song.id, what: 'convert' }">Convert again</AppButton>
             <AppButton size="sm" variant="quiet" @click="confirming = { id: song.id, what: 'delete' }">Delete</AppButton>

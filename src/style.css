@@ -24,7 +24,11 @@
   --color-warn-ink: #78350f;
 }
 
-/* Dark: the same variables, other values. Follows the system unless data-theme on <html> says otherwise. */
+/* Dark: the same variables, other values. Follows the system unless data-theme on <html> says otherwise
+   (src/lib/theme.js sets it from the Theme button). color-scheme makes the browser's own parts follow: the
+   speed list, the sliders, the scrollbars. */
+:root { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --color-bg: #141414; --color-panel: #1e1e1f; --color-ink: #ececec; --color-muted: #9a9aa0; --color-line: #333336;
@@ -33,6 +37,7 @@
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --color-bg: #141414; --color-panel: #1e1e1f; --color-ink: #ececec; --color-muted: #9a9aa0; --color-line: #333336;
   --color-accent: #fb923c; --color-accent-soft: #3a2416; --color-beat: #f97316; --color-loop: #172554;
   --color-loop-line: #60a5fa; --color-chord: #fdba74; --color-warn-bg: #422006; --color-warn-ink: #fde68a;

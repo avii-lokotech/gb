@@ -4,6 +4,7 @@ import router from './router';
 import { setUnauthorizedHandler } from './lib/api';
 import { useAuth } from './stores/authStore';
 import './style.css';
+import './lib/theme.js';   // sets the chosen colour theme before anything is drawn
 
 // Any 401 from the Worker clears the session and returns the user to /login, and back here after logging in.
 const auth = useAuth();

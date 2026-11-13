@@ -4,7 +4,7 @@
 usage: GB_CONVERTER_TOKEN=<token> python3 tools/song2cho/converter.py [--url URL] [--once] [--interval S] [--keep]
 
 It asks the site for the oldest waiting song (worker/converter.ts), downloads its recording, runs song2cho.sh
-on it, uploads the band-only and the drums & bass tracks, the ChordPro text and the timing, and asks again.
+on it, uploads the band-only and the drums & bass tracks and the ChordPro text (timing included), and asks again.
 While it is not running, uploaded songs wait. A song that fails is marked failed on the site, with the reason;
 the full output of song2cho is kept in tools/song2cho/work/queue/job-<id>.log.
 
@@ -93,14 +93,11 @@ def convert(site, job, keep):
             mp3 = out / f"{name}.{track}.mp3"
             if mp3.exists():
                 site.call("PUT", f"track/{song}/{track}", mp3.read_bytes(), "audio/mpeg")
-        timing = out / f"{name}.sync.json"
         # The {x_audio: …} lines name this machine's files; on the site the tracks are the song's own.
         text = "\n".join(l for l in cho.read_text(encoding="utf-8").split("\n")
                          if not l.startswith(("{x_audio:", "{x_instrumental:", "{x_rhythm:")))
-        site.call("POST", f"done/{song}", {
-            "cho": text,
-            "sync": json.loads(timing.read_text(encoding="utf-8")) if timing.exists() else None,
-        })
+        # The text holds the timing ({x_bars}, {x_line}, {x_end}); nothing is sent apart from it.
+        site.call("POST", f"done/{song}", {"cho": text, "sync": None})
         logfile.unlink()
         log(f"song {song}: ready")
     finally:

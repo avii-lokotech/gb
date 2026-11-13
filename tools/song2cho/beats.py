@@ -5,9 +5,10 @@ beats, downbeats = f2b(sys.argv[1])
 beats, downbeats = np.asarray(beats), np.asarray(downbeats)
 
 def drop_extra_beats(beats, downbeats):
-    """The tracker sometimes hears an off-beat note as a beat: one beat too many, halfway between two real ones.
-    That is a bar with a beat too many, and two beats at double speed. Such a beat sits between two gaps that are
-    each well under the tempo around it and together one normal beat; it is removed unless it is a downbeat."""
+    """The tracker sometimes hears a beat too many. Either an off-beat note, halfway between two real beats: it
+    sits between two gaps that are each well under the tempo around it and together one normal beat. Or the same
+    beat twice: it follows the beat before it by a small fraction of the tempo. Both give a bar a beat too many;
+    such a beat is removed unless it is a downbeat."""
     beats = list(beats); down = {round(float(d), 3) for d in downbeats}
     dropped = []
     i = 1
@@ -15,8 +16,9 @@ def drop_extra_beats(beats, downbeats):
         around = np.diff(beats[max(0, i - 8):i + 9])
         tempo = float(np.median(around))
         before, after = beats[i] - beats[i - 1], beats[i + 1] - beats[i]
-        if (before < 0.7 * tempo and after < 0.7 * tempo and 0.8 * tempo <= before + after <= 1.25 * tempo
-                and round(float(beats[i]), 3) not in down):
+        halfway = before < 0.7 * tempo and after < 0.7 * tempo and 0.8 * tempo <= before + after <= 1.25 * tempo
+        twice = before < 0.3 * tempo
+        if (halfway or twice) and round(float(beats[i]), 3) not in down:
             dropped.append(beats.pop(i))
             continue
         i += 1

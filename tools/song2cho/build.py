@@ -2,7 +2,7 @@
 
 usage: build.py WORKDIR OUT.cho --title T --artist A --audio PATH [--instrumental PATH] [--rhythm PATH] [--capo auto|N]
 """
-import argparse, difflib, json, re
+import argparse, difflib, json, os, re
 from collections import Counter
 import numpy as np
 from notes import SHARP, FLAT
@@ -103,6 +103,70 @@ def merge_half_bars(bar_starts, n_beats, chords):
     return out, len(bar_starts) - len(out)
 
 
+def even_bars(beats, bar_starts, raw, conf):
+    """A bar that lasts as long as the bars around it but has another number of beats was counted wrong: the
+    tracker dropped a beat, heard one too many, or followed a slower pulse for a moment. Such a bar gets the usual
+    number of beats, evenly spaced, each with the chord (and its confidence) of the tracked beat nearest to it.
+    A bar that really is shorter or longer (a 2/4 bar among 4/4, a pickup) lasts differently and is left alone,
+    as is the last bar, whose end is not known. Returns beats, bar starts, chords, confidences and the number of
+    bars changed."""
+    ends = bar_starts[1:] + [len(beats)]
+    lens = [e - s for s, e in zip(bar_starts, ends)]
+    meter = int(np.bincount(lens).argmax())
+    t0 = [float(beats[s]) for s in bar_starts]
+    durs = [t0[k + 1] - t0[k] for k in range(len(t0) - 1)]
+    regular = [d for d, n in zip(durs, lens) if n == meter]
+    if not regular:
+        return beats, bar_starts, raw, conf, 0
+    out_beats, out_raw, out_conf, out_starts, changed = [], [], [], [], 0
+    for k, (s, e) in enumerate(zip(bar_starts, ends)):
+        out_starts.append(len(out_beats))
+        near = [durs[j] for j in range(max(0, k - 4), min(len(durs), k + 5)) if lens[j] == meter]
+        usual = float(np.median(near or regular))        # the tempo drifts: compare with the bars around
+        if k < len(durs) and lens[k] != meter and 0.88 * usual <= durs[k] <= 1.12 * usual:
+            for q in range(meter):
+                t = t0[k] + q * durs[k] / meter
+                i = s + int(np.argmin(np.abs(beats[s:e] - t)))
+                out_beats.append(t); out_raw.append(raw[i]); out_conf.append(conf[i])
+            changed += 1
+        else:
+            out_beats += [float(t) for t in beats[s:e]]; out_raw += list(raw[s:e]); out_conf += list(conf[s:e])
+    return np.array(out_beats), out_starts, out_raw, out_conf, changed
+
+
+def sung_from(work, lines):
+    """Whisper often stretches the first word of a phrase back over the music before it: the word then "starts"
+    at the beginning of the recording, or of an instrumental break, long before anyone sings. For the first word
+    of each line that is implausibly long, the start is moved to where the vocal track really becomes audible
+    within it (or, without that track, to a normal word's length before its end). The bars before the singing
+    are then not counted to it: at the start of a song they become the Intro. Returns what was moved."""
+    LONG, WORD = 1.0, 0.6                                   # seconds: a suspiciously long word; a normal one
+    late = [ln[0] for ln in lines if ln[0]["e"] - ln[0]["s"] > LONG]
+    if not late:
+        return []
+    env = None
+    stem = os.path.join(work, "sep", "htdemucs", os.path.basename(os.path.normpath(work)), "vocals.wav")
+    if os.path.exists(stem):
+        import librosa
+        y, sr = librosa.load(stem, sr=11025, mono=True)
+        hop = 256
+        env = librosa.feature.rms(y=y, frame_length=1024, hop_length=hop)[0]
+        loud = 0.1 * float(np.percentile(env, 95))          # audible: a tenth of the loud passages
+        held = 6                                            # … for 6 frames on end, about 140 ms
+    moved = []
+    for w in late:
+        start = None
+        if env is not None:
+            i0, i1 = int(w["s"] * sr / hop), min(len(env) - held, int((w["e"] - 0.1) * sr / hop))
+            start = next((i * hop / sr for i in range(max(i0, 0), i1) if env[i:i + held].min() > loud), None)
+        if start is None:
+            start = w["e"] - WORD
+        start = max(w["s"], start - 0.05)
+        if start - w["s"] > 0.2:
+            moved.append((w["w"], w["s"], start)); w["s"] = start
+    return moved
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("work"); ap.add_argument("out")
@@ -130,6 +194,9 @@ def main():
     bar_starts, joined = merge_half_bars(bar_starts, len(beats), raw)
     if joined:
         print(f"joined {joined} pairs of half bars into whole bars")
+    beats, bar_starts, raw, conf, evened = even_bars(beats, bar_starts, raw, conf)
+    if evened:
+        print(f"gave {evened} bars of the usual length the usual number of beats")
     last_beats = [] if a.keep_passing else [i - 1 for i in bar_starts if i > 0]
     lab = clean_beat_chords(raw, conf, last_beats)
 
@@ -228,6 +295,9 @@ def main():
             merged.append(ln)
     lines = merged
 
+    for word, was, now in sung_from(a.work, lines):
+        print(f"line start moved to where the singing starts: {word!r} {mmss(was)} -> {mmss(now)} ({now - was:.1f} s later)")
+
     # sections: break on vocal gaps of ~1 bar or more
     sections, cur = [], []
     for ln in lines:
@@ -253,10 +323,8 @@ def main():
     blocks = []
     pos = 0
     for sec, sb, eb in zip(sections, sbars, ends):
-        if sb > pos and pos == 0 and bars[sb][0] < meter:
-            sb = 0                     # only a pickup before the first section: it belongs to it
-        if sb > pos:
-            blocks.append(block("inst", pos, sb))
+        if sb > pos:                   # bars nobody sings in: the Intro before the first section, even if it
+            blocks.append(block("inst", pos, sb))   # is only a short first bar; an Instrumental further on
         last = bar_of(sec[-1][-1]["e"]) + 1
         if eb - last >= 2:
             blocks.append(block("vocal", sb, last, sec))
@@ -301,6 +369,13 @@ def main():
             b["label"] = "Intro" if i == 0 else "Outro" if i == len(blocks) - 1 else "Instrumental"
 
     # --- emit ----------------------------------------------------------------
+    # The timing is in the text, as directives of our own, every time in whole milliseconds (src/lib/song.js):
+    # {x_bars: …} before a grid row, the start of each of its bars; {x_line: start end} before a lyric line and
+    # {x_words: …} after it, the start of each of its words; {x_end: …} once, the end of the last bar. A bar has
+    # as many beats as cells.
+    def ms(t):
+        return str(int(round(float(t) * 1000)))
+
     def grid(first, last):
         rows, row = [], []
         prev = None
@@ -326,7 +401,8 @@ def main():
             bar_txt = " | ".join(" ".join(c.ljust(3) for c in cells).rstrip() for cells in r)
             lead = "||" if i == 0 else "| "
             tail = "|." if bk + len(r) >= len(bars) else "|"
-            out.append(f"{mmss(bar_t[bk]):>5} {lead} {bar_txt} {tail}")
+            out.append("{x_bars: " + " ".join(ms(bar_t[bk + j]) for j in range(len(r))) + "}")
+            out.append(f"{lead} {bar_txt} {tail}")
         return out
 
     def chorded_line(ln, t1, shown):  # t1: start of the next line
@@ -366,7 +442,8 @@ def main():
     out += [f"{{key: {key}}}"]
     if capo:
         out.append(f"{{capo: {capo}}}")
-    out += [f"{{time: 4/4}}", f"{{tempo: {bpm}}}", f"{{duration: {mmss(beats[-1])}}}"]
+    # The usual bar's beats; six fast beats are counted in eighths (6/8), everything else in quarters.
+    out += [f"{{time: {meter}/{8 if meter == 6 else 4}}}", f"{{tempo: {bpm}}}", f"{{duration: {mmss(beats[-1])}}}"]
     if a.audio:
         out.append(f"{{x_audio: {a.audio}}}")
     if a.instrumental:
@@ -375,7 +452,9 @@ def main():
         out.append(f"{{x_rhythm: {a.rhythm}}}")
     out += ["",
             "# Draft generated by song2cho from the recording. Check by ear!",
-            "# Grid rows start with the time (m:ss) in the recording.",
+            "# {x_bars: ...} before a grid row: when each of its bars starts; {x_line: start end} before a",
+            "# lyric line: when it is sung, and {x_words: ...} when each of its words starts. All times in ms",
+            "# from the start of the recording.",
             "# Lines starting with '# ?' mark uncertain words or chords.", ""]
 
     sync_lines = []
@@ -384,7 +463,7 @@ def main():
         if lb <= fb:
             continue
         env = "verse" if label.startswith("Verse") else "chorus" if label == "Chorus" else None
-        out.append(f'{{start_of_grid label="{label}" shape="1+{a.bars_per_row}x4"}}')
+        out.append(f'{{start_of_grid label="{label}" shape="1+{a.bars_per_row}x{meter}"}}')
         out += grid(fb, lb)
         out.append("{end_of_grid}")
         # uncertain chords in this block
@@ -400,6 +479,8 @@ def main():
             for li, ln in enumerate(sec):
                 nxt = sec[li + 1][0]["s"] if li + 1 < len(sec) else block_end
                 txt, shown = chorded_line(ln, nxt, shown)
+                out.append("{x_line: " + ms(ln[0]["s"]) + " " + ms(ln[-1]["e"]) + "}")
+                out.append("{x_words: " + " ".join(ms(w["s"]) for w in ln) + "}")
                 out.append(txt)
                 sync_lines.append([round(ln[0]['s'], 3), round(ln[-1]['e'], 3),
                                    [[round(w['s'], 3), w['w']] for w in ln]])
@@ -409,6 +490,7 @@ def main():
             out.append(f"{{end_of_{env}}}")
         out.append("")
 
+    out.append("{x_end: " + ms(beats[-1] + beat_dur) + "}")
     open(a.out, "w").write("\n".join(out))
     sync = {"beats": [round(float(x), 3) for x in beats],
             "bars": [[int(s_), int(e_)] for s_, e_ in bars],

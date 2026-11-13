@@ -1,7 +1,7 @@
 <script setup>
 // The player: plays a song's recording and follows it on the sheet (bars, beats, lyric lines, now/next chord),
 // with a loop, a click, tempo, vocals off / drums & bass tracks and the beat offset (measured, tapped or nudged).
-// The song comes from the API: its ChordPro text, its timing and up to three tracks (the recording, vocals
+// The song comes from the API: its ChordPro text, which holds the timing too, and up to three tracks (the recording, vocals
 // removed, drums and bass). Speed and loop are saved with the song; the beat offset belongs to this device and
 // stays in its localStorage. Edit opens the song's text next to the sheet, which follows what is typed.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
@@ -11,17 +11,22 @@ import AppNotice from '../components/AppNotice.vue';
 import SongSheet from '../components/SongSheet.vue';
 import { api, errorMessage } from '../lib/api';
 import { measureNode, waveOf } from '../lib/measure.js';
-import { barOfBeat, barStart, beatAt, beatLen, cellIdx, layoutSong, median, mmss, parseCho, transposeChord } from '../lib/song.js';
+import { barOfBeat, barStart, beatAt, beatLen, cellIdx, layoutSong, median, mmss, parseCho, transposeChord, withTiming } from '../lib/song.js';
 
 const props = defineProps({ id: { type: Number, required: true } }); // the song's id
 
 const SPEEDS = [0.5, 0.6, 0.7, 0.75, 0.85, 0.9, 1];
+// A line of the sheet holds two bars on a phone and four from Tailwind's sm: (40rem), as SongSheet draws it;
+// the rows are cut to that, so they are laid out again when the window crosses it.
+const wide = window.matchMedia('(min-width: 40rem)');
+let barsPerLine = wide.matches ? 4 : 2;
+function onWide() { barsPerLine = wide.matches ? 4 : 2; if (song && layout.value) applySong(); }
 const TAPS_NEEDED = 8;
 const DRAWER_HEIGHT = 'h-80 md:h-96';   // the editor drawer, and the space kept free for it under the sheet
 const SYNC_KEY = 'guitarbook.tapsync:song:' + props.id;
 
 const audio = ref(null);                  // the <audio> element
-let song = null, sync = null;             // the parsed .cho and its timing file
+let song = null, sync = null;             // the parsed text and the timing it gives
 const layout = shallowRef(null);
 
 const title = ref('Loading…');
@@ -46,7 +51,8 @@ const pitchText = computed(() => (sounding.value ? 'Sounding' : capo.value ? `Sh
 
 /* ---------------- the sheet ---------------- */
 function applySong() {
-  const l = layoutSong(song, sync);
+  const l = layoutSong(song, { barsPerLine });
+  sync = l.sync;
   const m = song.meta;
   title.value = m.title || 'Untitled';
   meta.value = [m.artist, m.key && 'key ' + m.key, l.capo ? 'capo ' + l.capo : '', m.time, m.tempo && m.tempo + ' bpm']
@@ -190,8 +196,9 @@ async function load() {
       warn.value = data.status === 'failed' ? `The conversion failed: ${data.error}` : 'This song is not converted yet.';
       return;
     }
-    savedCho.value = data.cho; draftCho = data.draft ?? data.cho;
-    song = parseCho(data.cho); sync = data.sync;
+    // a song converted before the timing was in the text: put it there (stored when the text is next saved)
+    savedCho.value = withTiming(data.cho, data.sync); draftCho = withTiming(data.draft ?? data.cho, data.sync);
+    song = parseCho(savedCho.value);
     applySong();
     restoreSetting(data);
     // loaded as blobs: the audio needs the session token, which an <audio> element cannot send
@@ -212,8 +219,8 @@ async function load() {
 }
 
 /* ---------------- editing the song's text ---------------- */
-// The editor holds the ChordPro text; the sheet is laid out again from it while typing, so a wrong bar count
-// shows at once. Nothing is stored until Save. Cancel goes back to the stored text; "Converted draft" puts the
+// The editor holds the ChordPro text; the sheet and the timing are worked out again from it while typing, so
+// a bar or a line without its time shows at once. Nothing is stored until Save. Cancel goes back to the stored text; "Converted draft" puts the
 // text the conversion made in the editor.
 const editing = ref(false), editText = ref(''), savedCho = ref(''), saving = ref(false), editNote = ref('');
 let draftCho = '', previewTimer = null;
@@ -453,6 +460,7 @@ function tap() {
 
 onMounted(() => {
   document.addEventListener('keydown', onKey);
+  wide.addEventListener('change', onWide);
   loadSync();
   load();
   frame = requestAnimationFrame(loop);
@@ -460,6 +468,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   gone = true;
   document.removeEventListener('keydown', onKey);
+  wide.removeEventListener('change', onWide);
   cancelAnimationFrame(frame);
   clearTimeout(measureTimer); clearTimeout(tapTimer); clearTimeout(previewTimer);
   flushSetting();
@@ -474,6 +483,7 @@ onBeforeUnmount(() => {
   <header class="border-b border-line bg-panel px-3 py-2.5 sm:px-4 md:sticky md:top-0 md:z-10">
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
       <RouterLink class="text-sm text-muted no-underline hover:text-accent" :to="{ name: 'songs' }">‹ Songs</RouterLink>
+      <RouterLink class="text-sm text-muted no-underline hover:text-accent" :to="{ name: 'beats', query: { id } }">Beats</RouterLink>
       <div class="min-w-0">
         <h1 class="text-lg font-bold">{{ title }}</h1>
         <div class="text-sm text-muted">{{ meta }}</div>
@@ -550,8 +560,8 @@ onBeforeUnmount(() => {
         <AppButton :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</AppButton>
         <AppButton :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</AppButton>
         <span class="text-sm text-accent" role="status">{{ editNote }}</span>
-        <span class="ml-auto hidden text-xs text-muted lg:inline">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
-          In the lyrics <code>[Am]</code> puts a chord before a word. Keep the number of bars and of lyric lines.</span>
+        <span class="ml-auto hidden text-xs text-muted lg:inline"><code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord; <code>{x_bars: …}</code> above a row is
+          when each of its bars starts, <code>{x_line: start end}</code> above a lyric line when it is sung, in ms.</span>
       </div>
       <textarea class="min-h-0 w-full flex-1 resize-none overflow-auto whitespace-pre border-t border-line bg-bg px-3 py-2.5 font-mono text-sm text-ink focus:outline-2 focus:-outline-offset-2 focus:outline-accent sm:px-4"
         :value="editText" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="ChordPro text" @input="onEditInput"></textarea>
