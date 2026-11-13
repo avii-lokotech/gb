@@ -2,7 +2,7 @@
 // The sheet of a song: per section, rows of time | the bars of a lyric line | that lyric line (on a narrow screen
 // the lyric line goes under its bars). It draws what
 // layoutSong (lib/song.js) laid out and marks where the song is; the playing is PlayerView's.
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { isChordToken, transposeChord } from '../lib/song.js';
 
 const props = defineProps({
@@ -33,7 +33,7 @@ const COLUMNS = {
   6: 'grid-cols-12 sm:grid-cols-24',
   7: 'grid-cols-14 sm:grid-cols-28'
 };
-const columns = () => COLUMNS[props.layout.meter] || COLUMNS[4];
+const columns = computed(() => COLUMNS[props.layout.meter] || COLUMNS[4]);
 const inLoop = (k) => props.loop !== null && k >= props.loop[0] && k <= props.loop[1];
 // The current bar is tinted; a bar of the loop has the loop's colour, or its outline when it is also current.
 function barClass(k) {
@@ -63,7 +63,7 @@ watch(() => props.curBar, (k) => {
         <div v-for="(r, ri) in s.rows" :key="ri" class="flex items-start gap-3 py-1 xl:gap-4">
           <div class="w-16 shrink-0 cursor-pointer pt-2.5 text-xs tabular-nums text-muted" @click="r.bars.length && emit('seek-bar', r.bars[0].k, false)">{{ r.time }} {{ r.meter }}</div>
           <div class="grid min-w-0 flex-1 grid-cols-1 gap-x-4 gap-y-0.5 xl:grid-cols-2">
-            <div class="grid content-start gap-y-1" :class="columns()">
+            <div class="grid content-start gap-y-1" :class="columns">
               <div v-for="bar in r.bars" :key="bar.k" :data-bar="bar.k"
                 class="grid min-h-9 cursor-pointer content-center border-l-2 border-line py-0.5 last:border-r-2"
                 :class="barClass(bar.k)"

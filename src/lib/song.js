@@ -106,7 +106,7 @@ export function beatLen(sync) {
 /* ---------------- layout ---------------- */
 // The sheet of a parsed song, lined up with its timing (sync, or null):
 //   capo, flats     for showing the sounding chords instead of the shapes
-//   sections        [{ comment }] or [{ label, bpm, lyrics, rows }]; bpm is the section's tempo; a row is a lyric line with the bars it is sung
+//   sections        [{ comment }] or [{ label, bpm, rows }]; bpm is the section's tempo; a row is a lyric line with the bars it is sung
 //                   over, or bars only: { time, meter, bars: [{ k, n, cells: [{ tok, dot }], carry, strum }], chunks, g }
 //   meter           beats of the song's usual bar, from {time: 4/4}: the sheet draws so many columns per bar
 //   cellCounts[k]   cells of bar k
@@ -184,7 +184,8 @@ export function layoutSong(song, sync) {
   // over the beat's note value of the song's {time: 4/4}. None is given to a pickup (a section's first bar,
   // shorter than the next) or to one-beat bars (a tracker's stumble or a held last chord), nor when the bars
   // are not lined up with the recording.
-  const unit = (meta.time || '').match(/^\d+\/(\d+)$/)?.[1] || '4';
+  const time = (meta.time || '').match(/^(\d+)\/(\d+)$/);   // {time: 4/4}: beats in a usual bar / the beat's note value
+  const unit = time?.[2] || '4';
   const oneSignature = (rows, k0, k1) => {
     const out = [];
     for (const r of rows) {
@@ -246,10 +247,10 @@ export function layoutSong(song, sync) {
       if (lyr) lines.forEach(({ chunks, g }) => rows.push({ k0: 0, k1: 0, chunks, g }));
     }
     sections.push({ label: parts[0].label || parts[0].env || '', bpm: grid ? bpmOf(k0, k1) : 0,
-      rows: grid ? oneSignature(rows, k0, k1) : rows, lyrics: !!lyr });
+      rows: grid ? oneSignature(rows, k0, k1) : rows });
   }
 
-  // 3. what to draw for every row
+  // 2. what to draw for every row
   for (const s of sections) {
     for (const r of s.rows || []) {
       r.time = r.k1 > r.k0 && barsMatch ? mmss(barStart(sync, r.k0)) : '';
@@ -264,5 +265,5 @@ export function layoutSong(song, sync) {
     }
   }
 
-  return { capo, flats, meter: parseInt(meta.time, 10) || 4, sections, cellCounts: bars.map((b) => b.cells.length), beatChord, barsMatch, linesMatch, warns };
+  return { capo, flats, meter: time ? +time[1] : 4, sections, cellCounts: bars.map((b) => b.cells.length), beatChord, barsMatch, linesMatch, warns };
 }

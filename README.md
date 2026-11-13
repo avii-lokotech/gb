@@ -15,7 +15,7 @@ player. Songs are not in this repo.
   mobile-first: unprefixed classes are the phone layout, and `sm:` / `md:` / `lg:` / `xl:` add to it (the sheet
   shows two bars per line on a phone and four from `sm:`, with the lyric line beside its bars from `xl:`). No
   arbitrary values, no `@apply`, no named classes: what repeats is a component (`components/AppButton.vue`, with
-  `variant`, `size` and `on` props).
+  `variant`, `size` and `on` props, and `components/AppNotice.vue`).
 - `worker/` — the Worker; only `/api/*` reaches it. `POST /api/login` returns a JWT; `POST /api/<op>` runs one op
   (`worker/ops/`) for the logged-in user; `POST /api/uploadSong` and `GET /api/audio/<id>/<track>` carry the audio;
   `/api/converter/*` is the converter's side of the queue, with its own token (`worker/converter.ts`).

@@ -5,7 +5,7 @@
 /* The design system: the site's colours replace Tailwind's palette; everything else (type scale, spacing,
    breakpoints, radii) is Tailwind's own, in rem. Each colour is a CSS variable and its utilities:
    --color-panel gives bg-panel, text-panel, border-panel. */
-@theme static {
+@theme {
   --color-*: initial;
   --color-white: #fff;
   --color-ok: #16a34a;

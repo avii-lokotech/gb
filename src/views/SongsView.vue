@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../stores/authStore';
 import AppButton from '../components/AppButton.vue';
+import AppNotice from '../components/AppNotice.vue';
 
 const router = useRouter();
 const auth = useAuth();
@@ -101,7 +102,7 @@ function logout() {
     <span class="ml-auto text-sm text-muted">{{ auth.state.user?.name || auth.state.user?.email }}</span>
     <AppButton @click="logout">Sign out</AppButton>
   </header>
-  <p v-if="error" class="bg-warn-bg px-4 py-2 text-sm text-warn-ink" role="alert">{{ error }}</p>
+  <AppNotice v-if="error" role="alert">{{ error }}</AppNotice>
   <main class="mx-auto max-w-3xl p-3 sm:p-4">
     <p v-if="uploading" class="my-4 text-muted">Uploading {{ uploading }}…</p>
     <p v-if="loading" class="my-4 text-muted">Loading…</p>

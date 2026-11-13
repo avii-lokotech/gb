@@ -6,7 +6,8 @@
 // stays in its localStorage. Edit opens the song's text next to the sheet, which follows what is typed.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
-import AppButton from '../components/AppButton.vue';
+import AppButton, { CONTROL } from '../components/AppButton.vue';
+import AppNotice from '../components/AppNotice.vue';
 import SongSheet from '../components/SongSheet.vue';
 import { api, errorMessage } from '../lib/api';
 import { measureNode, waveOf } from '../lib/measure.js';
@@ -16,6 +17,7 @@ const props = defineProps({ id: { type: Number, required: true } }); // the song
 
 const SPEEDS = [0.5, 0.6, 0.7, 0.75, 0.85, 0.9, 1];
 const TAPS_NEEDED = 8;
+const DRAWER_HEIGHT = 'h-80 md:h-96';   // the editor drawer, and the space kept free for it under the sheet
 const SYNC_KEY = 'guitarbook.tapsync:song:' + props.id;
 
 const audio = ref(null);                  // the <audio> element
@@ -469,7 +471,7 @@ onBeforeUnmount(() => {
 
 <template>
   <!-- the controls: at the top of the page on a phone, staying in view from md: -->
-  <header class="z-10 border-b border-line bg-panel px-3 py-2.5 sm:px-4 md:sticky md:top-0">
+  <header class="border-b border-line bg-panel px-3 py-2.5 sm:px-4 md:sticky md:top-0 md:z-10">
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
       <RouterLink class="text-sm text-muted no-underline hover:text-accent" :to="{ name: 'songs' }">‹ Songs</RouterLink>
       <div class="min-w-0">
@@ -494,7 +496,7 @@ onBeforeUnmount(() => {
       <!-- the position: a line of its own on a phone, between the other controls from sm: -->
       <input class="min-w-36 flex-1 basis-full accent-accent sm:basis-0" type="range" min="0" max="1000" :value="seekVal" aria-label="Position"
         @input="onSeekInput" @change="seeking = false">
-      <select class="cursor-pointer rounded-md border border-line bg-bg px-2.5 py-1 text-sm text-ink" title="[ and ] to change" :value="speed" @change="setSpeed(+$event.target.value)">
+      <select :class="CONTROL" title="[ and ] to change" :value="speed" @change="setSpeed(+$event.target.value)">
         <option v-for="s in SPEEDS" :key="s" :value="s">{{ Math.round(s * 100) }}%</option>
       </select>
       <AppButton title="L" :on="loopOn" @click="toggleLoop">{{ loopText }}</AppButton>
@@ -535,20 +537,20 @@ onBeforeUnmount(() => {
       </template>
     </div>
   </header>
-  <div v-if="warn" class="bg-warn-bg px-4 py-2 text-sm text-warn-ink">{{ warn }}</div>
+  <AppNotice v-if="warn">{{ warn }}</AppNotice>
   <SongSheet v-if="layout" :layout="layout" :sounding="sounding" :cur-bar="curBar" :cur-cell="curCell" :cur-line="curLine"
     :loop="loopRange" :follow="follow" :playing="playing" @seek-bar="seekBar" @seek-line="seekLine" />
   <!-- the editor: a drawer over the bottom of the page; the spacer, as high as the drawer, keeps the end of the
        sheet reachable above it -->
   <template v-if="editing">
-    <div class="h-80 md:h-96"></div>
-    <section class="fixed inset-x-0 bottom-0 z-20 flex h-80 flex-col border-t border-line bg-panel shadow-2xl md:h-96" aria-label="The song's text">
+    <div :class="DRAWER_HEIGHT"></div>
+    <section class="fixed inset-x-0 bottom-0 z-20 flex flex-col border-t border-line bg-panel shadow-2xl" :class="DRAWER_HEIGHT" aria-label="The song's text">
       <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3 py-2 sm:px-4">
         <AppButton variant="primary" :disabled="saving || !dirty" @click="saveEdit">{{ saving ? 'Saving…' : 'Save' }}</AppButton>
         <AppButton :disabled="saving" @click="cancelEdit">{{ dirty ? 'Cancel' : 'Close' }}</AppButton>
         <AppButton :disabled="saving || editText === draftCho" title="Put the text as it was converted in the editor" @click="useDraft">Converted draft</AppButton>
         <span class="text-sm text-accent" role="status">{{ editNote }}</span>
-        <span class="hidden text-xs text-muted lg:ml-auto lg:inline">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
+        <span class="ml-auto hidden text-xs text-muted lg:inline">Grid rows are the bars: <code>| D . Em . |</code> is one bar, a cell per beat, <code>.</code> keeps the chord.
           In the lyrics <code>[Am]</code> puts a chord before a word. Keep the number of bars and of lyric lines.</span>
       </div>
       <textarea class="min-h-0 w-full flex-1 resize-none overflow-auto whitespace-pre border-t border-line bg-bg px-3 py-2.5 font-mono text-sm text-ink focus:outline-2 focus:-outline-offset-2 focus:outline-accent sm:px-4"

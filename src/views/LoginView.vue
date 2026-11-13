@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '../stores/authStore';
 import { errorMessage } from '../lib/api';
 import AppButton from '../components/AppButton.vue';
+import AppNotice from '../components/AppNotice.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -41,7 +42,7 @@ async function handleSubmit() {
       <input id="email" v-model.trim="email" :class="FIELD" type="email" autocomplete="username" required />
       <label for="password" class="text-sm text-muted">Password</label>
       <input id="password" v-model="password" :class="FIELD" type="password" autocomplete="current-password" required />
-      <p v-if="error" class="mb-2 rounded-md bg-warn-bg px-2.5 py-2 text-sm text-warn-ink" role="alert">{{ error }}</p>
+      <AppNotice v-if="error" boxed role="alert">{{ error }}</AppNotice>
       <AppButton type="submit" variant="primary" size="lg" :disabled="submitting">
         {{ submitting ? 'Signing in…' : 'Sign in' }}
       </AppButton>
